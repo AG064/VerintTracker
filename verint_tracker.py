@@ -26,6 +26,11 @@ except ImportError:
 class VerintTracker:
     """Main class for tracking Verint schedule and sending notifications."""
     
+    # Configuration constants for timing
+    PAGE_LOAD_WAIT_SECONDS = 5
+    PAGE_REFRESH_WAIT_SECONDS = 2
+    ERROR_RETRY_WAIT_SECONDS = 30
+    
     def __init__(self, config_path: str = "config.json"):
         """Initialize the tracker with configuration."""
         self.config = self._load_config(config_path)
@@ -75,7 +80,7 @@ class VerintTracker:
         print("Navigating to Verint...")
         try:
             self.page.goto(self.config["verint_url"], timeout=60000)
-            time.sleep(5)  # Wait for page to fully load
+            time.sleep(self.PAGE_LOAD_WAIT_SECONDS)  # Wait for page to fully load
             
             # Check if login is required
             if "login" in self.page.url.lower() or "signin" in self.page.url.lower():
@@ -89,7 +94,7 @@ class VerintTracker:
                 
                 # Navigate again after login
                 self.page.goto(self.config["verint_url"], timeout=60000)
-                time.sleep(5)
+                time.sleep(self.PAGE_LOAD_WAIT_SECONDS)
             
             print("Successfully navigated to Verint.")
         except Exception as e:
@@ -115,27 +120,9 @@ class VerintTracker:
                 
                 if time_elements:
                     print(f"Found {len(time_elements)} potential schedule elements.")
-                    
-                # For demonstration, create a sample schedule
-                # In production, this would parse the actual page content
-                now = datetime.now()
-                schedule_data = [
-                    {
-                        "time": (now + timedelta(minutes=10)).strftime("%H:%M"),
-                        "activity": "Available",
-                        "datetime": now + timedelta(minutes=10)
-                    },
-                    {
-                        "time": (now + timedelta(hours=1)).strftime("%H:%M"),
-                        "activity": "Break",
-                        "datetime": now + timedelta(hours=1)
-                    },
-                    {
-                        "time": (now + timedelta(hours=1, minutes=15)).strftime("%H:%M"),
-                        "activity": "Available",
-                        "datetime": now + timedelta(hours=1, minutes=15)
-                    }
-                ]
+                    # TODO: Parse actual schedule from page elements
+                    # This requires customization based on your Verint page structure
+                    # See parser_template.py for examples
                 
             except Exception as e:
                 print(f"Note: Could not parse schedule automatically: {e}")
@@ -212,7 +199,7 @@ class VerintTracker:
                 try:
                     # Refresh the page to get latest schedule
                     self.page.reload(timeout=30000)
-                    time.sleep(2)
+                    time.sleep(self.PAGE_REFRESH_WAIT_SECONDS)
                     
                     # Parse current schedule
                     schedule = self.parse_schedule()
@@ -226,7 +213,9 @@ class VerintTracker:
                         self.check_for_upcoming_changes(schedule)
                     else:
                         print(f"[{datetime.now().strftime('%H:%M:%S')}] No schedule data found.")
-                        print("  Note: You may need to customize the schedule parser for your Verint page.")
+                        print("  Note: The schedule parser needs to be customized for your Verint page.")
+                        print("  Run 'python3 inspect_schedule.py' to identify HTML elements.")
+                        print("  Then modify parse_schedule() method using parser_template.py as reference.")
                     
                     # Wait before next check
                     time.sleep(self.config["check_interval_seconds"])
@@ -235,8 +224,8 @@ class VerintTracker:
                     raise
                 except Exception as e:
                     print(f"Error in monitoring loop: {e}")
-                    print("Retrying in 30 seconds...")
-                    time.sleep(30)
+                    print(f"Retrying in {self.ERROR_RETRY_WAIT_SECONDS} seconds...")
+                    time.sleep(self.ERROR_RETRY_WAIT_SECONDS)
         
         except KeyboardInterrupt:
             print("\n\nStopping tracker...")
@@ -248,13 +237,13 @@ class VerintTracker:
         if self.browser:
             try:
                 self.browser.close()
-            except:
+            except Exception:
                 pass
         
         if self.playwright:
             try:
                 self.playwright.stop()
-            except:
+            except Exception:
                 pass
         
         print("Tracker stopped.")
