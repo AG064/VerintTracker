@@ -3,7 +3,6 @@
 Quick test script to verify the installation and configuration.
 """
 
-import sys
 import json
 
 def check_dependencies():
@@ -109,3 +108,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

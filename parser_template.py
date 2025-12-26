@@ -11,7 +11,7 @@ INSTRUCTIONS:
 4. Customize the selectors and parsing logic below
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Dict
 
 
@@ -171,9 +171,9 @@ def parse_time_to_datetime(time_str: str, date_ref: datetime = None) -> datetime
         "%I:%M:%S %p",     # 12-hour with seconds and AM/PM: "2:30:00 PM"
     ]
     
-    for fmt in formats:
+    for time_format in formats:
         try:
-            parsed_time = datetime.strptime(time_str.strip(), fmt)
+            parsed_time = datetime.strptime(time_str.strip(), time_format)
             return date_ref.replace(
                 hour=parsed_time.hour,
                 minute=parsed_time.minute,
@@ -264,3 +264,4 @@ if __name__ == "__main__":
     # test_parser_locally()
     print("This is a template file. Copy the parse_schedule_template() function")
     print("to verint_tracker.py and customize it for your Verint page.")
+

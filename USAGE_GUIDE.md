@@ -194,3 +194,4 @@ If you encounter issues:
 2. Check console output for error messages
 3. Review this guide and the main README.md
 4. Create an issue on GitHub with error details
+

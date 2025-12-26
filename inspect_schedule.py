@@ -7,7 +7,6 @@ the HTML elements needed to parse your schedule.
 """
 
 import sys
-import time
 from pathlib import Path
 
 try:
@@ -83,7 +82,8 @@ def inspect_verint_page(url: str):
                         try:
                             text = elem.text_content()[:100]
                             print(f"  [{i}]: {text}")
-                        except:
+                        except Exception:
+                            # Some elements may not expose text content or may error; skip these
                             pass
         
         print("\n" + "="*60)
@@ -105,7 +105,7 @@ def main():
         with open("config.json", 'r') as f:
             config = json.load(f)
             url = config.get("verint_url")
-    except:
+    except (OSError, json.JSONDecodeError):
         url = None
     
     if not url:
@@ -121,3 +121,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

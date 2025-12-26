@@ -182,3 +182,4 @@ logging.basicConfig(filename='verint_tracker.log', level=logging.INFO)
 
 ### Q: Can I run this on a Raspberry Pi?
 **A:** Technically possible but not recommended due to limited resources. Edge may not be available, you'd need to use Chromium instead.
+

@@ -2,5 +2,7 @@
   "verint_url": "https://wfo.mt7.verintcloudservices.com/wfo/ui/#wsm%5Bws%5D=legacyWorkspace&url=..%2Fcontrol%2Fshowschedule%3FNEWUINAV%3D1&selTab=1_MY_HOME-%3E1_AM_MYTIME-%3E2_AM_MYTIME_SCHEDULE",
   "notification_minutes_before": 5,
   "check_interval_seconds": 60,
-  "browser_type": "msedge"
+  "browser_type": "msedge",
+  "headless": false
 }
+

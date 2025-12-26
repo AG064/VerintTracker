@@ -133,3 +133,4 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 ## Security Note
 
 This application stores browser session data in the `playwright-state` directory to maintain your login. Keep this directory secure and don't share it. The directory is excluded from git via `.gitignore`.
+

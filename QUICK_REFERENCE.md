@@ -127,3 +127,4 @@ Edit `config.json`:
 ---
 
 **Quick Start:** Run `setup.bat` (Windows) or `bash setup.sh` (Linux/Mac), then `python verint_tracker.py`
+

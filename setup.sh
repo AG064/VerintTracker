@@ -16,9 +16,17 @@ fi
 echo "✓ Python 3 found: $(python3 --version)"
 echo ""
 
+# Check if pip is available
+echo "Checking pip for Python 3..."
+if ! python3 -m pip --version &> /dev/null; then
+    echo "Error: pip for Python 3 is not installed or not available."
+    echo "Please install pip for Python 3 (e.g., 'python3 -m ensurepip --upgrade' or via your package manager)."
+    exit 1
+fi
+
 # Install Python dependencies
 echo "Installing Python dependencies..."
-pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 
 if [ $? -ne 0 ]; then
     echo "Error: Failed to install Python dependencies."
@@ -45,3 +53,4 @@ echo ""
 echo "Start the tracker:"
 echo "  python3 verint_tracker.py"
 echo ""
+

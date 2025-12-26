@@ -299,7 +299,7 @@ This application was designed to be:
 The parser is intentionally flexible to accommodate different Verint page layouts. Users can customize it based on their specific needs using the provided template and inspection tool.
 
 ## Version
-Initial Release - December 2024
+Initial Release
 
 ---
 
@@ -307,3 +307,4 @@ Initial Release - December 2024
 **Core Application:** 318 lines
 **Documentation:** 800+ lines
 **Supporting Tools:** 274+ lines
+

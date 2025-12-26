@@ -39,6 +39,8 @@ class VerintTracker:
         self.playwright = None
         self.last_notification_time: Optional[datetime] = None
         self.current_schedule: List[Dict] = []
+        self.notified_activities: set = set()  # Track notified activities to prevent duplicates
+        self.consecutive_parse_failures: int = 0  # Track parsing failures
         
     def _load_config(self, config_path: str) -> dict:
         """Load configuration from JSON file."""
@@ -63,10 +65,14 @@ class VerintTracker:
         
         try:
             # Launch Edge with persistent context
+            # Use headless mode from config if specified, otherwise default to False for initial login
+            headless = self.config.get("headless", False)
+            browser_channel = self.config.get("browser_type", "msedge")
+            
             self.browser = self.playwright.chromium.launch_persistent_context(
                 user_data_dir=str(user_data_dir),
-                headless=False,  # Keep visible for initial login
-                channel="msedge"
+                headless=headless,
+                channel=browser_channel
             )
             self.page = self.browser.pages[0] if self.browser.pages else self.browser.new_page()
             print("Browser started successfully.")
@@ -147,20 +153,33 @@ class VerintTracker:
                 continue
                 
             activity_time = item["datetime"]
+            
+            # Handle midnight boundary: if activity time appears to be in the past but within 12 hours,
+            # it's likely tomorrow's schedule
+            if activity_time < now and (now - activity_time) > timedelta(hours=12):
+                activity_time = activity_time + timedelta(days=1)
+                item["datetime"] = activity_time
+            
             time_until = activity_time - now
+            
+            # Create unique identifier for this activity
+            activity_id = f"{item['time']}_{item['activity']}"
             
             # Check if we should notify
             if timedelta(0) < time_until <= notification_threshold:
-                # Don't send duplicate notifications within 1 minute
-                if (self.last_notification_time is None or 
-                    now - self.last_notification_time > timedelta(minutes=1)):
-                    
+                # Don't send duplicate notifications for the same activity
+                if activity_id not in self.notified_activities:
                     self.send_notification(
                         f"Change to: {item['activity']}",
                         f"At {item['time']}, change your status to {item['activity']}\n"
                         f"({int(time_until.total_seconds() / 60)} minutes remaining)"
                     )
                     self.last_notification_time = now
+                    self.notified_activities.add(activity_id)
+            elif time_until > notification_threshold:
+                # Remove from notified set if we're now far from the activity time
+                # This allows re-notification if schedule is updated
+                self.notified_activities.discard(activity_id)
     
     def send_notification(self, title: str, message: str):
         """Send a desktop notification."""
@@ -195,16 +214,27 @@ class VerintTracker:
             print(f"Notifications will be sent {self.config['notification_minutes_before']} minutes before changes.")
             print("Press Ctrl+C to stop.\n")
             
+            # Implement smarter refresh strategy to avoid excessive page loads
+            last_reload_time = time.time()
+            check_interval = self.config['check_interval_seconds']
+            # Reload page every 5 check intervals or at least every 5 minutes
+            reload_interval = max(check_interval * 5, 300)
+            
             while True:
                 try:
-                    # Refresh the page to get latest schedule
-                    self.page.reload(timeout=30000)
-                    time.sleep(self.PAGE_REFRESH_WAIT_SECONDS)
+                    current_time = time.time()
+                    
+                    # Refresh the page only if reload interval has elapsed
+                    if current_time - last_reload_time >= reload_interval:
+                        self.page.reload(timeout=60000)
+                        time.sleep(self.PAGE_REFRESH_WAIT_SECONDS)
+                        last_reload_time = current_time
                     
                     # Parse current schedule
                     schedule = self.parse_schedule()
                     
                     if schedule:
+                        self.consecutive_parse_failures = 0
                         print(f"[{datetime.now().strftime('%H:%M:%S')}] Schedule updated. Next activities:")
                         for item in schedule[:3]:  # Show next 3 items
                             print(f"  - {item['time']}: {item['activity']}")
@@ -212,10 +242,18 @@ class VerintTracker:
                         # Check for upcoming changes
                         self.check_for_upcoming_changes(schedule)
                     else:
+                        self.consecutive_parse_failures += 1
                         print(f"[{datetime.now().strftime('%H:%M:%S')}] No schedule data found.")
-                        print("  Note: The schedule parser needs to be customized for your Verint page.")
-                        print("  Run 'python3 inspect_schedule.py' to identify HTML elements.")
-                        print("  Then modify parse_schedule() method using parser_template.py as reference.")
+                        
+                        if self.consecutive_parse_failures >= 5:
+                            print("\n" + "!"*60)
+                            print("WARNING: Parser has failed 5 times consecutively.")
+                            print("The schedule parser likely needs customization for your Verint page.")
+                            print("  1. Run the 'inspect_schedule.py' script to identify HTML elements.")
+                            print("  2. Edit parse_schedule() method in verint_tracker.py")
+                            print("  3. See parser_template.py for examples")
+                            print("!"*60 + "\n")
+                            self.consecutive_parse_failures = 0  # Reset to avoid spam
                     
                     # Wait before next check
                     time.sleep(self.config["check_interval_seconds"])
@@ -238,12 +276,14 @@ class VerintTracker:
             try:
                 self.browser.close()
             except Exception:
+                # Best-effort cleanup: ignore any errors when closing the browser
                 pass
         
         if self.playwright:
             try:
                 self.playwright.stop()
             except Exception:
+                # Best-effort cleanup: ignore any errors when stopping Playwright
                 pass
         
         print("Tracker stopped.")
@@ -257,3 +297,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
