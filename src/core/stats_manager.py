@@ -227,5 +227,111 @@ class StatsManager:
                         first_time = t
             except ValueError:
                 continue
-                
         return first_time
+
+    def get_daily_volume_list(self, days=7):
+        """Return list of (date_str, count) tuples for the last N days."""
+        daily_counts = self.get_daily_stats() # Returns {date: count}
+        today = datetime.now().date()
+        result = []
+        
+        for i in range(days - 1, -1, -1):
+            date = today - timedelta(days=i)
+            date_str = date.strftime("%Y-%m-%d")
+            count = daily_counts.get(date_str, 0)
+            result.append((date_str, count))
+            
+        return result
+
+    def get_aggregated_stats(self, period="day", metric="cph", count=14):
+        """
+        Get stats aggregated by day or week.
+        period: 'day' or 'week'
+        metric: 'cph', 'aht', 'volume'
+        Returns: list of (label, value) tuples
+        """
+        now = datetime.now()
+        data_points = []
+        
+        # 1. Gather raw data (tickets and duration) grouped by period key
+        grouped_tickets = defaultdict(int)
+        grouped_duration = defaultdict(float) # seconds
+        period_keys = [] # To maintain order
+        key_labels = {}
+        
+        # Helper to generate keys
+        def get_key(date_obj, p):
+            if p == "day":
+                return date_obj.strftime("%Y-%m-%d")
+            elif p == "week":
+                year, week, _ = date_obj.isocalendar()
+                return f"{year}-W{week:02d}"
+        
+        # Generate target keys (x-axis)
+        if period == "day":
+            for i in range(count - 1, -1, -1):
+                d = now - timedelta(days=i)
+                k = get_key(d, "day")
+                period_keys.append(k)
+                key_labels[k] = d.strftime("%a %d") # Mon 23
+        elif period == "week":
+            # For weeks, start from current week and go back
+            current_iso = now.isocalendar() # (year, week, day)
+            # Need strict math for weeks. 
+            # Simple approach: Iterate back by 7 days 'count' times
+            curr = now
+            for i in range(count):
+                k = get_key(curr, "week")
+                period_keys.insert(0, k) # Prepend
+                # Label: "Wk 46"
+                y, w, _ = curr.isocalendar()
+                key_labels[k] = f"Wk {w}"
+                curr -= timedelta(days=7)
+                
+        # Fill Aggregates
+        # 1. Tickets
+        for ticket in self.data["tickets"]:
+            if isinstance(ticket, str): t_str = ticket; has_reply = True
+            else: t_str = ticket["timestamp"]; has_reply = ticket.get("has_reply", True)
+            
+            if not has_reply: continue
+            
+            try:
+                t_date = datetime.fromisoformat(t_str)
+                k = get_key(t_date, period)
+                if k in period_keys: # Only count if in range
+                    grouped_tickets[k] += 1
+                # If we asked for 7 days but have data for older keys not in list, ignore
+            except: continue
+            
+        # 2. Duration (from activity)
+        # activity keys are always YYYY-MM-DD
+        for date_str, act_data in self.data["activity"].items():
+            try:
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                target_k = get_key(date_obj, period)
+                # If this day belongs to one of our target weeks/days
+                if target_k in period_keys: # simplistic check
+                    grouped_duration[target_k] += act_data.get("duration", 0)
+            except: continue
+            
+        # Calc Metric
+        for k in period_keys:
+            t_count = grouped_tickets[k]
+            dur_sec = grouped_duration[k]
+            val = 0.0
+            
+            if metric == "volume":
+                val = t_count
+            elif metric == "cph":
+                hours = dur_sec / 3600
+                if hours > 0.1: val = round(t_count / hours, 1)
+                else: val = 0.0
+            elif metric == "aht":
+                # Average Handle Time (Minutes)
+                if t_count > 0: val = round((dur_sec / 60) / t_count, 1)
+                else: val = 0.0
+                
+            data_points.append((key_labels[k], val))
+            
+        return data_points

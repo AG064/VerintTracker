@@ -8,6 +8,8 @@ from dateutil import parser
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 from datetime import datetime, timedelta
 
+import os
+
 class VerintTracker:
     """
     Handles browser automation for Verint using Playwright.
@@ -18,11 +20,14 @@ class VerintTracker:
         self.browser = None
         self.context = None
         self.page = None
-        self.user_data_dir = Path("playwright-state").absolute()
+        
+        # Paths
+        self.local_state_dir = Path("playwright-state").absolute()
+        self.system_edge_dir = Path(os.path.expanduser("~\\AppData\\Local\\Microsoft\\Edge\\User Data"))
         
         # Load config
         self.config = self._load_config()
-        self.verint_url = self.config.get("verint_url", "https://verint.com/login") # Placeholder default
+        self.verint_url = self.config.get("verint_url", "https://verint.com/login") 
         self.headless = self.config.get("headless", False)
 
     def _load_config(self) -> dict:
@@ -35,78 +40,75 @@ class VerintTracker:
             print(f"Error loading config: {e}")
         return {}
 
-    def _kill_stale_processes(self):
-        """
-        Kill only the Edge processes that are using our specific user data directory.
-        This prevents interfering with the user's personal browser sessions.
-        """
-        data_dir_str = str(self.user_data_dir).replace("\\", "\\\\")
-        
-        # PowerShell command to find processes with command line arguments matching our data dir
-        ps_command = f"""
-        Get-CimInstance Win32_Process | 
-        Where-Object {{ $_.Name -eq 'msedge.exe' -and $_.CommandLine -like '*{data_dir_str}*' }} | 
-        ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}
-        """
-        
+    def _is_edge_running(self) -> bool:
+        """Check if Microsoft Edge is currently running."""
         try:
-            subprocess.run(["powershell", "-Command", ps_command], capture_output=True, text=True)
-            time.sleep(1) # Give OS time to release locks
-        except Exception as e:
-            print(f"Warning: Failed to clean up processes: {e}")
+            # Check process list for msedge.exe
+            cmd = 'tasklist /FI "IMAGENAME eq msedge.exe" /NH'
+            output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode()
+            return "msedge.exe" in output
+        except Exception:
+            # If check fails, assume it might be running to be safe
+            return True
 
     def start_browser(self):
-        """Start the browser with persistent context."""
-        self._kill_stale_processes()
-        
+        """
+        Start the browser. 
+        Forces the use of the system default profile to share login state.
+        NOTE: Microsoft Edge must be completely closed for this to work.
+        """
         try:
             self.playwright = sync_playwright().start()
             
-            # Launch persistent context
-            # We use msedge channel to use the installed Edge browser
-            self.context = self.playwright.chromium.launch_persistent_context(
-                user_data_dir=self.user_data_dir,
-                channel="msedge",
-                headless=self.headless,
-                # --no-sandbox is NOT used here to avoid the warning.
-                # --test-type suppresses the "unsupported command-line flag" warning in some versions.
-                # --disable-session-crashed-bubble prevents "Restore pages" popup which might cause multiple tabs
-                # --disable-restore-session-state prevents restoring previous tabs
-                args=["--start-maximized", "--test-type", "--disable-session-crashed-bubble", "--disable-restore-session-state"],
-                no_viewport=True, # Allow window to size itself (disable viewport emulation)
-                ignore_default_args=["--enable-automation"]
-            )
+            # Common args
+            launch_args = [
+                "--start-maximized", 
+                "--no-default-browser-check"
+            ]
             
-            # Ensure we only have one page open (close extra tabs from restored session)
-            # Wait loop to catch any delayed tab restorations
-            print("DEBUG: Waiting for browser tabs to stabilize...")
-            start_time = time.time()
-            while time.time() - start_time < 5: # Wait up to 5 seconds
-                pages = self.context.pages
-                if len(pages) > 1:
-                    print(f"DEBUG: Detected {len(pages)} pages, closing extras...")
-                    # Keep the first page, close others
-                    for p in pages[1:]:
-                        try:
-                            p.close()
-                        except Exception as e:
-                            print(f"DEBUG: Failed to close page: {e}")
-                time.sleep(0.5)
+            print(f"DEBUG: Attempting to use system profile at {self.system_edge_dir}...")
             
-            pages = self.context.pages
-            print(f"DEBUG: Browser launched with {len(pages)} pages")
-            
-            if not pages:
-                self.page = self.context.new_page()
+            # Warn if running
+            if self._is_edge_running():
+                print("WARNING: Edge appears to be running. This may cause the launch to fail or delegate to the existing window without Playwright control.")
+
+            try:
+                self.context = self.playwright.chromium.launch_persistent_context(
+                    user_data_dir=self.system_edge_dir,
+                    channel="msedge",
+                    headless=self.headless,
+                    args=launch_args,
+                    no_viewport=True,
+                )
+                print("DEBUG: Successfully attached to system profile.")
+            except Exception as e:
+                raise Exception(
+                    "Failed to open Work Profile in Edge. Please ensure all Microsoft Edge windows are CLOSED before starting the tracker."
+                ) from e
+
+            # Cleanup Tabs: Close extra tabs if session restore opened them
+            try:
+                while len(self.context.pages) > 1:
+                    self.context.pages[1].close()
+                    time.sleep(0.2)
+            except:
+                pass
+
+            # Get or create valid page
+            if self.context.pages:
+                self.page = self.context.pages[0]
             else:
-                self.page = pages[0]
+                self.page = self.context.new_page()
             
-            self.page.bring_to_front()
             self.page.set_default_timeout(30000)
             
         except Exception as e:
             print(f"Failed to start browser: {e}")
-            self.cleanup()
+            if self.playwright:
+                try:
+                    self.playwright.stop()
+                except:
+                    pass
             raise
 
     def navigate_to_verint(self) -> bool:

@@ -1,13 +1,14 @@
-from pynput import keyboard, mouse
+import keyboard
 import threading
 import time
+import ctypes
 from collections import deque
 
 class InputMonitor:
     """
     Monitors keyboard and mouse input in the background.
     Calculates KPM (Keys Per Minute) and CPM (Clicks Per Minute).
-    Thread-safe implementation using locks for counter updates.
+    Uses hardware polling for mouse clicks to ensure capture in VDIs.
     """
     def __init__(self, stats_manager):
         self.stats_manager = stats_manager
@@ -16,6 +17,7 @@ class InputMonitor:
         self.session_keys = 0
         self.session_clicks = 0
         self.session_start = time.time()
+        self._session_restored = False
         
         # Rolling window for "Current" KPM/CPM (last 60 seconds)
         self._key_timestamps = deque()
@@ -30,9 +32,6 @@ class InputMonitor:
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
         
-        self.keyboard_listener = None
-        self.mouse_listener = None
-        
     def restore_session_state(self, keys, clicks, duration_seconds):
         """
         Restore session counters from persistent storage.
@@ -45,25 +44,28 @@ class InputMonitor:
             # to have this much duration', effectively ignoring the gap where app was closed.
             if duration_seconds > 0:
                 self.session_start = time.time() - duration_seconds
+                self._session_restored = True
             else:
                 self.session_start = time.time()
+                self._session_restored = False
 
     def start(self):
         """Start input monitoring and periodic saving."""
         self.running = True
         self._stop_event.clear()
-        self.session_start = time.time()
+        
+        # Only reset session start if NOT restored
+        if not self._session_restored:
+            self.session_start = time.time()
+            
         self._last_save_time = time.time()
-        
-        # Start listeners
-        self.keyboard_listener = keyboard.Listener(on_press=self.on_press)
-        self.mouse_listener = mouse.Listener(on_click=self.on_click)
-        
-        self.keyboard_listener.start()
-        self.mouse_listener.start()
         
         # Start periodic save thread
         threading.Thread(target=self._periodic_save, daemon=True).start()
+        
+        # Start unified input polling thread (Robust for VDI/Omnissa)
+        # Replaces keyboard.hook and separate mouse poller
+        threading.Thread(target=self._input_poller, daemon=True).start()
         
     def stop(self):
         """Stop monitoring and save remaining stats."""
@@ -72,29 +74,63 @@ class InputMonitor:
         
         # Save remaining data
         self._save_deltas()
+            
+    def _input_poller(self):
+        """
+        Polls keyboard and mouse using GetAsyncKeyState.
+        This technique bypasses hook limitations in VDI environments (Citrix/Omnissa).
+        """
+        # Track state of all keys (0-255)
+        # We start with all assuming False to detect initial presses correctly
+        key_states = [False] * 256
         
-        if self.keyboard_listener:
-            self.keyboard_listener.stop()
-        if self.mouse_listener:
-            self.mouse_listener.stop()
-            
-    def on_press(self, key):
-        """Callback for key press."""
-        self.session_keys += 1
-        now = time.time()
-        with self._lock:
-            self._delta_keys += 1
-            self._key_timestamps.append(now)
-            
-    def on_click(self, x, y, button, pressed):
-        """Callback for mouse click."""
-        if pressed:
-            self.session_clicks += 1
-            now = time.time()
-            with self._lock:
-                self._delta_clicks += 1
-                self._click_timestamps.append(now)
-            
+        # Mouse VKs
+        VK_LBUTTON = 0x01
+        VK_RBUTTON = 0x02
+        VK_MBUTTON = 0x04
+        
+        while self.running:
+            try:
+                start_time = time.time()
+                
+                # Iterate through relevant Virtual Key codes
+                # 1-254 (0 is undefined, 255 is reserved)
+                # Performance: 255 ctypes calls takes ~2-5ms usually.
+                for vk in range(1, 255):
+                    # Check if key is down (MSB set)
+                    # GetAsyncKeyState returns short
+                    state = ctypes.windll.user32.GetAsyncKeyState(vk)
+                    is_down = (state & 0x8000) != 0
+                    
+                    # Rising Edge Detection (Pressed now, wasn't before)
+                    if is_down and not key_states[vk]:
+                        now = time.time()
+                        
+                        # Determine if Mouse or Keyboard
+                        if vk in (VK_LBUTTON, VK_RBUTTON, VK_MBUTTON):
+                            self.session_clicks += 1
+                            with self._lock:
+                                self._delta_clicks += 1
+                                self._click_timestamps.append(now)
+                        else:
+                            # It's a key
+                            self.session_keys += 1
+                            with self._lock:
+                                self._delta_keys += 1
+                                self._key_timestamps.append(now)
+                                
+                    key_states[vk] = is_down
+                    
+                # Rate limiting to ~50Hz (20ms is granular enough for typing)
+                elapsed = time.time() - start_time
+                sleep_time = 0.02 - elapsed
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+                    
+            except Exception as e:
+                print(f"Input polling error: {e}")
+                time.sleep(1)
+
     def _save_deltas(self):
         """Save accumulated deltas to stats manager."""
         with self._lock:
