@@ -35,7 +35,7 @@ fi
 
 echo ""
 echo "Installing Microsoft Edge browser driver..."
-playwright install msedge
+python3 -m playwright install msedge
 
 if [ $? -ne 0 ]; then
     echo "Warning: Failed to install Edge driver."
@@ -51,6 +51,6 @@ echo "Run the verification test:"
 echo "  python3 test_setup.py"
 echo ""
 echo "Start the tracker:"
-echo "  python3 verint_tracker.py"
+echo "  python3 app.py"
 echo ""
 

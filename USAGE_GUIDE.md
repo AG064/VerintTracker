@@ -16,10 +16,21 @@
 
 When you run the tracker for the first time:
 
-1. **Browser Opens**: Microsoft Edge will open automatically
-2. **Login Prompt**: If not logged in, you'll be asked to log in to your Microsoft account
-3. **Navigation**: The browser will navigate to your Verint schedule page
-4. **Monitoring Starts**: The app will begin checking your schedule every 60 seconds
+1. **Browser Opens**: Microsoft Edge will open automatically.
+2. **Login/Navigation**: 
+   - If you configured a **Verint URL**, the browser will navigate there automatically.
+   - If you left the URL empty, **manually navigate** to your schedule page in the opened browser window.
+3. **Monitoring Starts**: Once on the schedule page, the app will detect your schedule and begin monitoring.
+
+## Configuration
+
+You can configure the application via the **Settings** tab in the application window:
+
+- **Verint URL**: (Optional) The direct link to your schedule. Leave empty if you want to navigate manually or if the link changes.
+- **Notify Minutes Before**: How many minutes in advance to get an alert (default: 5).
+- **Check Interval**: How often to refresh the schedule (default: 60 seconds).
+- **Browser Type**: Choose between Edge or Chrome.
+- **Headless Mode**: Run browser in background (only recommended if you have a fixed URL and persistent login).
 
 ## Understanding the Console Output
 
@@ -113,7 +124,7 @@ for time_elem, activity_elem in zip(time_elements, activity_elements):
 
 ### "Browser doesn't open"
 - Verify Microsoft Edge is installed
-- Run: `playwright install msedge`
+- Run: `python -m playwright install msedge`
 - Check that you're running as a user with GUI access
 
 ### "Schedule not parsing correctly"

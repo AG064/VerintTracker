@@ -1,126 +1,90 @@
-# Verint Schedule Tracker
+0# Verint Schedule Tracker
 
-An automated application that monitors your Verint schedule and sends desktop notifications 5 minutes before you need to change your activity status.
+An automated application that monitors your Verint schedule and helps you manage your time with a modern GUI.
 
 ## Features
 
-- 🔔 Desktop notifications 5 minutes before activity changes
-- 🌐 Automatic browser integration with Microsoft Edge
-- 🔐 Maintains your Microsoft account session
-- ⏱️ Configurable check intervals and notification timing
-- 📋 Displays upcoming schedule activities
+- 🖥️ **Modern Dark GUI**: Clean, minimalistic interface built with CustomTkinter.
+- 📅 **Schedule Display**: Shows your daily schedule clearly with "Next Activity" highlighting.
+- ⏳ **Countdown Timer**: Shows time remaining until your next activity switch.
+- ⏱️ **CPH Pacing Timer**: Built-in timer to help you maintain 7.5 CPH (8 minutes per ticket).
+  - **Reply vs No-Reply**: Track tickets that require replies separately from those that don't.
+  - **Hotkeys**: Use `Numpad -` to quickly complete a ticket.
+- ⌨️ **Input Monitoring**: Tracks your KPM (Keys Per Minute) and CPM (Clicks Per Minute) locally to help you gauge activity levels.
+- 🔔 **Smart Notifications**: Audible and visual desktop notifications 5 minutes before activity changes.
+- 🌐 **Robust Automation**: 
+  - Connects to Verint using Microsoft Edge.
+  - Handles manual login via a GUI prompt if needed.
+  - Automatically cleans up "zombie" browser processes to keep your system fast.
+- 🔐 **Secure**: Maintains your Microsoft account session locally in a dedicated folder.
 
 ## Prerequisites
 
-- Python 3.7 or higher
-- Microsoft Edge browser
-- Microsoft account with access to Verint
+- **Windows 10 or 11**
+- **Python 3.10** or higher
+- **Microsoft Edge** browser installed
 
-## Installation
+## Quick Setup (Windows)
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/AG064/work.git
-   cd work
-   ```
+1. **Clone or Download** this repository.
+2. Double-click **`setup.bat`**.
+   - This will automatically create a virtual environment, install all dependencies, and set up the browser driver.
 
-2. **Install Python dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Building an Executable (.exe)
 
-3. **Install Microsoft Edge browser driver:**
-   ```bash
-   playwright install msedge
-   ```
+To package the application into a single `.exe` file for easy distribution:
 
-## Configuration
-
-Edit the `config.json` file to customize settings:
-
-```json
-{
-  "verint_url": "https://wfo.mt7.verintcloudservices.com/wfo/ui/#wsm%5Bws%5D=legacyWorkspace&url=..%2Fcontrol%2Fshowschedule%3FNEWUINAV%3D1&selTab=1_MY_HOME-%3E1_AM_MYTIME-%3E2_AM_MYTIME_SCHEDULE",
-  "notification_minutes_before": 5,
-  "check_interval_seconds": 60,
-  "browser_type": "msedge"
-}
-```
-
-**Configuration options:**
-- `verint_url`: Your Verint schedule URL
-- `notification_minutes_before`: How many minutes before an activity change to notify (default: 5)
-- `check_interval_seconds`: How often to check the schedule in seconds (default: 60)
-- `browser_type`: Browser to use (default: "msedge")
+1. Run **`setup.bat`** first to ensure all dependencies are installed.
+2. Double-click **`build.bat`**.
+3. Once finished, check the **`dist`** folder.
+   - You will find `VerintTracker.exe` and `config.json`.
+   - You can move these two files to any computer (ensure Edge is installed on the target machine).
 
 ## Usage
 
-1. **Start the tracker:**
-   ```bash
-   python verint_tracker.py
-   ```
+1. Double-click **`run.bat`** (or the generated `.exe`) to start the application.
+2. **First-time Login**:
+   - The app will launch a browser window.
+   - If you are not logged in, a "Login Required" dialog will appear in the app.
+   - Log in to your Microsoft account in the browser window.
+   - Click "I have logged in" in the app dialog.
+3. **Navigation**:
+   - If you set a **Verint URL** in Settings, the browser navigates automatically.
+   - If you left it empty, **manually navigate** to your schedule page.
+4. **Dashboard**:
+   - View your schedule and countdowns.
+   - Use the **CPH Pacing Timer** for your tickets.
+5. **Statistics**:
+   - Switch to the "Statistics" tab to view your daily/weekly performance and input metrics.
 
-2. **First-time setup:**
-   - The application will open Microsoft Edge
-   - If you're not logged in, you'll be prompted to log in to your Microsoft account
-   - After logging in, the browser will navigate to your Verint schedule
-   - Your session will be saved for future runs
+## Configuration
 
-3. **Running:**
-   - The application will continuously monitor your schedule
-   - Console output will show upcoming activities
-   - Desktop notifications will appear 5 minutes before changes
-   - Press `Ctrl+C` to stop the tracker
+You can configure the application directly via the **Settings** tab:
 
-## How It Works
-
-1. **Browser Automation**: Uses Playwright to control Microsoft Edge with your existing login session
-2. **Schedule Monitoring**: Periodically refreshes the Verint page and parses your schedule
-3. **Smart Notifications**: Calculates time until next activity and sends notifications at the configured threshold
-4. **Persistent Session**: Maintains your Microsoft account login between runs
-
-## Customization
-
-### Adjusting Schedule Parsing
-
-The application includes a basic schedule parser. If you need to customize it for your specific Verint page layout:
-
-1. Open `verint_tracker.py`
-2. Locate the `parse_schedule()` method
-3. Modify the selectors and parsing logic to match your page structure
-
-### Notification Settings
-
-You can customize notifications by:
-- Changing `notification_minutes_before` in `config.json` (e.g., 10 for 10 minutes)
-- Modifying `check_interval_seconds` for more or less frequent checks
+- **Verint URL**: (Optional) The direct link to your schedule. Leave empty to navigate manually.
+- **Notify Minutes Before**: How many minutes in advance to get an alert.
+- **Check Interval**: How often to refresh the schedule.
+- **Browser Type**: Choose between Edge or Chrome.
+- **Headless Mode**: Run browser in background.
 
 ## Troubleshooting
 
-**Browser doesn't open:**
-- Ensure Microsoft Edge is installed
-- Run `playwright install msedge` again
-
-**Login issues:**
-- Delete the `playwright-state` folder and restart
-- Manually log in when prompted
+**Browser doesn't open / App hangs:**
+- Run `setup.bat` again to ensure drivers are installed.
+- The app attempts to kill stale Edge processes on startup. If issues persist, restart your computer.
 
 **Schedule not parsing:**
-- The default parser may need customization for your Verint page
-- Check console output for parsing errors
-- Modify the `parse_schedule()` method as needed
+- The parser tries multiple methods (Table, Text, Frames). If it fails, check the console output for errors.
 
-**No notifications appearing:**
-- Ensure your system allows desktop notifications
-- Check that Python has notification permissions
-- Notifications will also print to the console
+**Notifications not showing:**
+- Ensure Windows Focus Assist (Do Not Disturb) is off or allows notifications from Python.
 
-## Requirements
+## Developer Notes
 
-See `requirements.txt` for Python package dependencies:
-- `playwright` - Browser automation
-- `plyer` - Cross-platform desktop notifications  
-- `python-dateutil` - Date/time handling
+- **`app.py`**: Main GUI application entry point.
+- **`verint_tracker.py`**: Browser automation logic (Playwright).
+- **`stats_manager.py`**: Handles data storage (`ticket_stats.json`).
+- **`input_monitor.py`**: Background thread for KPM/CPM tracking.
 
 ## License
 

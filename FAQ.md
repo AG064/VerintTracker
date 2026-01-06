@@ -20,7 +20,7 @@
 **A:** Yes, the tracker uses Microsoft Edge because Verint requires a Microsoft account login, and Edge provides the best integration for Microsoft authentication.
 
 ### Q: Can I use a different browser?
-**A:** Technically yes, but Edge is recommended for the best Microsoft account integration. You can modify the code to use Chrome or Firefox if needed.
+**A:** Yes. You can select between **Microsoft Edge** and **Google Chrome** in the **Settings** tab of the application.
 
 ### Q: What Python version do I need?
 **A:** Python 3.7 or higher is required. Python 3.8+ is recommended.
@@ -98,7 +98,7 @@ However, some organizations have policies against browser automation tools.
 - Windows: `setup.bat`
 - Linux/Mac: `bash setup.sh`
 
-Or manually: `pip install -r requirements.txt && playwright install msedge`
+Or manually: `pip install -r requirements.txt && python -m playwright install msedge`
 
 ### Q: The browser shows "Page not found" or "Access denied"
 **A:**
@@ -108,7 +108,7 @@ Or manually: `pip install -r requirements.txt && playwright install msedge`
 4. Check if your organization requires VPN access
 
 ### Q: "Error starting browser: msedge not found"
-**A:** Run: `playwright install msedge`
+**A:** Run: `python -m playwright install msedge`
 
 This downloads the browser driver needed for automation.
 

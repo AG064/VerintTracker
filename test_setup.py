@@ -42,7 +42,8 @@ def check_config():
             config = json.load(f)
         print("✓ Configuration file found and valid")
         
-        required_keys = ["verint_url", "notification_minutes_before", "check_interval_seconds"]
+        # verint_url is now optional
+        required_keys = ["notification_minutes_before", "check_interval_seconds"]
         for key in required_keys:
             if key in config:
                 print(f"  ✓ {key}: {config[key]}")

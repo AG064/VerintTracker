@@ -15,32 +15,31 @@ bash setup.sh
 ### Manual Installation
 ```bash
 pip install -r requirements.txt
-playwright install msedge
+python -m playwright install msedge
 ```
 
 ## Running the App
 
-```bash
-python verint_tracker.py
+### Windows
+Double-click **`run.bat`**
+
+Or via command line:
+```batch
+python app.py
 ```
 
-Or on Linux/Mac:
+### Linux/Mac
 ```bash
-python3 verint_tracker.py
+python3 app.py
 ```
 
 ## Configuration
 
-Edit `config.json`:
-
-```json
-{
-  "verint_url": "YOUR_VERINT_URL",
-  "notification_minutes_before": 5,
-  "check_interval_seconds": 60,
-  "browser_type": "msedge"
-}
-```
+Use the **Settings** tab in the application to configure:
+- Verint URL (Optional)
+- Notification timing
+- Check intervals
+- Browser type (Edge/Chrome)
 
 ## Common Commands
 
@@ -92,7 +91,7 @@ Edit `config.json`:
 | Problem | Solution |
 |---------|----------|
 | Dependencies not installed | Run `setup.sh` or `setup.bat` |
-| Browser doesn't open | Run `playwright install msedge` |
+| Browser doesn't open | Run `python -m playwright install msedge` |
 | Login issues | Delete `playwright-state/` folder |
 | Schedule not parsing | Run `inspect_schedule.py` and customize parser |
 | No notifications | Check system notification settings |

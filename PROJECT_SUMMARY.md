@@ -6,14 +6,18 @@ A complete Python-based desktop application that automatically monitors Verint W
 ## What's Included
 
 ### Core Application
-- **verint_tracker.py** (318 lines) - Main application with browser automation, schedule parsing, and notifications
-- **config.json** - User-configurable settings (URL, notification timing, check intervals)
+- **app.py** - Main GUI application with Dashboard, Statistics, and Settings
+- **verint_tracker.py** - Browser automation logic (Playwright)
+- **stats_manager.py** - Statistics tracking and persistence
+- **input_monitor.py** - Background input monitoring (KPM/CPM)
+- **config.json** - User settings (managed via GUI)
 
 ### Setup & Installation
 - **setup.sh** - Automated setup script for Linux/Mac
 - **setup.bat** - Automated setup script for Windows
+- **run.bat** - One-click launcher for Windows
+- **build.bat** - Script to compile standalone .exe
 - **requirements.txt** - Python package dependencies
-- **.gitignore** - Excludes build artifacts and sensitive data
 
 ### Testing & Inspection Tools
 - **test_setup.py** (98 lines) - Verifies installation and configuration
@@ -47,14 +51,9 @@ A complete Python-based desktop application that automatically monitors Verint W
 - Shows activity name and exact time
 
 ### 4. User-Friendly Configuration
-```json
-{
-  "verint_url": "https://...",
-  "notification_minutes_before": 5,
-  "check_interval_seconds": 60,
-  "browser_type": "msedge"
-}
-```
+- **In-App Settings Tab**: Configure all options directly in the GUI.
+- **Optional URL**: Support for manual navigation if URLs vary.
+- **Browser Choice**: Support for Edge and Chrome.
 
 ### 5. Developer Tools
 - Schedule inspector with DevTools integration
@@ -66,16 +65,15 @@ A complete Python-based desktop application that automatically monitors Verint W
 
 ```
 ┌─────────────────────┐
-│  verint_tracker.py  │
-│   Main Application  │
+│       app.py        │
+│      Main GUI       │
 └──────────┬──────────┘
            │
-           ├─► Playwright ──► Microsoft Edge ──► Verint WFM
-           │                                      (Web Interface)
+           ├─► verint_tracker.py ──► Playwright ──► Browser ──► Verint WFM
            │
-           ├─► Schedule Parser ──► Extract Times & Activities
+           ├─► stats_manager.py ──► ticket_stats.json
            │
-           ├─► Time Calculator ──► Check Upcoming Changes
+           ├─► input_monitor.py ──► Keyboard/Mouse Listeners
            │
            └─► Notification System ──► Desktop Alerts
 ```
@@ -175,7 +173,7 @@ setup.bat
 ### Manual
 ```bash
 pip install -r requirements.txt
-playwright install msedge
+python -m playwright install msedge
 python verint_tracker.py
 ```
 

@@ -3,6 +3,7 @@
   "notification_minutes_before": 5,
   "check_interval_seconds": 60,
   "browser_type": "msedge",
-  "headless": false
+  "headless": false,
+  "force_kill_browser": false
 }
 
