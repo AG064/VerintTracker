@@ -1,17 +1,23 @@
 @echo off
+setlocal
+
 echo ======================================
-echo Verint Tracker - Build Script
+echo Verint Tracker - CI Build Script
 echo ======================================
 echo.
+echo This script is intended for GitHub Actions (no pre-created venv).
+echo.
 
-REM Activate virtual environment if it exists
-if exist "venv\Scripts\activate.bat" (
-    echo Activating virtual environment...
-    call venv\Scripts\activate
+echo Upgrading pip...
+python -m pip install --upgrade pip
+
+echo Installing dependencies...
+if exist requirements.txt (
+    python -m pip install -r requirements.txt
 )
 
-echo Installing/Upgrading PyInstaller...
-pip install pyinstaller pillow --upgrade
+echo Installing/Upgrading PyInstaller and Pillow...
+python -m pip install --upgrade pyinstaller pillow
 
 echo.
 echo Checking for Logo...
@@ -28,27 +34,17 @@ pyinstaller --noconfirm --onefile --windowed --name "VerintTracker" ^
     --collect-all plyer ^
     --add-data "src/gui/assets/icon.ico;src/gui/assets" ^
     --icon "src/gui/assets/icon.ico" ^
-    --hidden-import "pynput.keyboard._win32" ^
-    --hidden-import "pynput.mouse._win32" ^
     app.py
 
-if errorlevel 1 (
+if %errorlevel% neq 0 (
     echo.
     echo Build Failed!
-    pause
-    exit /b 1
+    exit /b %errorlevel%
 )
 
 echo.
-echo Copying config file to dist folder...
-copy config.json dist\config.json >nul
-
-echo.
 echo ======================================
-echo Build Complete!
+echo CI Build Complete!
 echo ======================================
 echo.
 echo The executable is located in the "dist" folder.
-echo You can copy "VerintTracker.exe" and "config.json" to any location.
-echo Note: The first run might be slightly slower as it unpacks dependencies.
-echo.

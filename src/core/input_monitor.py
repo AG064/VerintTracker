@@ -16,6 +16,7 @@ class InputMonitor:
         # Session totals (since app start)
         self.session_keys = 0
         self.session_clicks = 0
+        self.session_active_duration = 0
         self.session_start = time.time()
         self._session_restored = False
         
@@ -35,13 +36,13 @@ class InputMonitor:
     def restore_session_state(self, keys, clicks, duration_seconds):
         """
         Restore session counters from persistent storage.
-        Backdates session_start so that (now - start) approx equals duration_seconds.
         """
         with self._lock:
             self.session_keys = keys
             self.session_clicks = clicks
-            # If we have previous duration, we treat 'start' as 'How long ago we would have started
-            # to have this much duration', effectively ignoring the gap where app was closed.
+            self.session_active_duration = duration_seconds
+            
+            # Legacy/Debug: maintain session_start
             if duration_seconds > 0:
                 self.session_start = time.time() - duration_seconds
                 self._session_restored = True
@@ -144,10 +145,16 @@ class InputMonitor:
             # Reset deltas
             self._delta_keys = 0
             self._delta_clicks = 0
+            
+            reported_duration = 0
+            # Only track duration if there was activity (Active Time)
+            if k > 0 or c > 0:
+                self.session_active_duration += duration
+                reported_duration = duration
         
         # Save to stats manager if there was activity
         if k > 0 or c > 0:
-            self.stats_manager.update_activity(k, c, duration)
+            self.stats_manager.update_activity(k, c, reported_duration)
 
     def _periodic_save(self):
         """Save stats every minute."""
@@ -157,16 +164,16 @@ class InputMonitor:
             self._save_deltas()
             
     def get_session_kpm(self):
-        """Calculate KPM for the current session (average)."""
-        duration_min = (time.time() - self.session_start) / 60
-        if duration_min < 0.01: return 0
-        return int(self.session_keys / duration_min)
+        """Calculate KPM for the current session (Active Time)."""
+        minutes = self.session_active_duration / 60
+        if minutes < 0.01: return 0
+        return int(self.session_keys / minutes)
         
     def get_session_cpm(self):
-        """Calculate Clicks Per Minute for the current session (average)."""
-        duration_min = (time.time() - self.session_start) / 60
-        if duration_min < 0.01: return 0
-        return int(self.session_clicks / duration_min)
+        """Calculate Clicks Per Minute for the current session (Active Time)."""
+        minutes = self.session_active_duration / 60
+        if minutes < 0.01: return 0
+        return int(self.session_clicks / minutes)
 
     def get_current_kpm(self):
         """Calculate KPM over the last 60 seconds (rolling window)."""

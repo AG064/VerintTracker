@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = []
+datas = [('src/gui/assets/icon.ico', 'src/gui/assets')]
 binaries = []
 hiddenimports = ['pynput.keyboard._win32', 'pynput.mouse._win32']
 tmp_ret = collect_all('customtkinter')
@@ -46,4 +46,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['src\\gui\\assets\\icon.ico'],
 )

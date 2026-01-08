@@ -186,7 +186,8 @@ class CPHTracker(ctk.CTkFrame):
         total_keys = self.input_monitor.session_keys
         total_clicks = self.input_monitor.session_clicks
         
-        self.input_stats_label.configure(text=f"KPM: {curr_kpm} (Avg: {avg_kpm}) | CPM: {curr_cpm} (Avg: {avg_cpm})")
+        # Display Session KPM/CPM as primary (Active Time), rolling in brackets
+        self.input_stats_label.configure(text=f"KPM: {avg_kpm} ({curr_kpm}) | CPM: {avg_cpm} ({curr_cpm})")
         
         # Update Totals Label if it exists (it should now)
         if hasattr(self, 'input_totals_label'):

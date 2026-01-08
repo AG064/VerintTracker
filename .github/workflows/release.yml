@@ -1,0 +1,41 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies + build EXE
+        shell: cmd
+        run: scripts\build_ci.bat
+
+      - name: Compute SHA256
+        shell: pwsh
+        run: |
+          $exe = "dist/VerintTracker.exe"
+          if (-not (Test-Path $exe)) { throw "Missing $exe" }
+          (Get-FileHash $exe -Algorithm SHA256).Hash + "  VerintTracker.exe" | Out-File -Encoding ascii "dist/VerintTracker.exe.sha256"
+
+      - name: Create GitHub Release + upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/VerintTracker.exe
+            dist/VerintTracker.exe.sha256
+          generate_release_notes: true

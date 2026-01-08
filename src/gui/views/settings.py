@@ -27,39 +27,44 @@ class SettingsView(ctk.CTkFrame):
 
         # Verint URL
         create_label("Verint URL (Optional):", 1)
-        self.url_entry = ctk.CTkEntry(self, width=400, placeholder_text="Leave empty to navigate manually", fg_color=THEME["bg_card"], text_color=THEME["text_primary"])
+        self.url_entry = ctk.CTkEntry(self, width=400, placeholder_text="Verint Login URL", fg_color=THEME["bg_card"], text_color=THEME["text_primary"])
         self.url_entry.grid(row=1, column=1, sticky="w", padx=10, pady=10)
+
+        # Target CPH
+        create_label("Target CPH:", 2)
+        self.cph_entry = ctk.CTkEntry(self, width=100, fg_color=THEME["bg_card"], text_color=THEME["text_primary"])
+        self.cph_entry.grid(row=2, column=1, sticky="w", padx=10, pady=10)
         
         # Notification Minutes
-        create_label("Notify Minutes Before:", 2)
+        create_label("Notify Minutes Before:", 3)
         self.notify_entry = ctk.CTkEntry(self, width=100, fg_color=THEME["bg_card"], text_color=THEME["text_primary"])
-        self.notify_entry.grid(row=2, column=1, sticky="w", padx=10, pady=10)
+        self.notify_entry.grid(row=3, column=1, sticky="w", padx=10, pady=10)
         
         # Check Interval
-        create_label("Check Interval (seconds):", 3)
+        create_label("Check Interval (seconds):", 4)
         self.interval_entry = ctk.CTkEntry(self, width=100, fg_color=THEME["bg_card"], text_color=THEME["text_primary"])
-        self.interval_entry.grid(row=3, column=1, sticky="w", padx=10, pady=10)
+        self.interval_entry.grid(row=4, column=1, sticky="w", padx=10, pady=10)
         
         # Browser Type
-        create_label("Browser Type:", 4)
+        create_label("Browser Type:", 5)
         self.browser_var = ctk.StringVar(value="msedge")
         self.browser_menu = ctk.CTkOptionMenu(self, values=["msedge", "chrome"], variable=self.browser_var, fg_color=THEME["bg_card"], button_color=THEME["accent"], button_hover_color=THEME["accent"])
-        self.browser_menu.grid(row=4, column=1, sticky="w", padx=10, pady=10)
+        self.browser_menu.grid(row=5, column=1, sticky="w", padx=10, pady=10)
         
         # Headless Mode
-        create_label("Headless Mode:", 5)
+        create_label("Headless Mode:", 6)
         self.headless_var = ctk.BooleanVar(value=False)
         self.headless_switch = ctk.CTkSwitch(self, text="Run browser in background", variable=self.headless_var, text_color=THEME["text_primary"], progress_color=THEME["accent"])
-        self.headless_switch.grid(row=5, column=1, sticky="w", padx=10, pady=10)
+        self.headless_switch.grid(row=6, column=1, sticky="w", padx=10, pady=10)
 
         # Manual File Mode
-        create_label("Debug Mode:", 6)
+        create_label("Debug Mode:", 7)
         self.manual_file_var = ctk.BooleanVar(value=False)
         self.manual_file_switch = ctk.CTkSwitch(self, text="Use manual_schedule.txt", variable=self.manual_file_var, text_color=THEME["text_primary"], progress_color=THEME["accent"])
-        self.manual_file_switch.grid(row=6, column=1, sticky="w", padx=10, pady=10)
+        self.manual_file_switch.grid(row=7, column=1, sticky="w", padx=10, pady=10)
 
         # Appearance
-        create_label("Theme:", 7)
+        create_label("Theme:", 8)
         self.appearance_var = ctk.StringVar(value=ctk.get_appearance_mode())
         self.appearance_menu = ctk.CTkOptionMenu(self, values=["System", "Light", "Dark"], 
                                                  command=self.change_appearance, 
@@ -68,11 +73,11 @@ class SettingsView(ctk.CTkFrame):
                                                  button_color=THEME["accent"], 
                                                  button_hover_color=THEME["accent_hover"],
                                                  text_color=("black", "white")) # Fix text color for light mode
-        self.appearance_menu.grid(row=7, column=1, sticky="w", padx=10, pady=10)
+        self.appearance_menu.grid(row=8, column=1, sticky="w", padx=10, pady=10)
         
         # Save Button
         self.save_btn = ctk.CTkButton(self, text="Save Settings", command=self.save_settings, fg_color=THEME["btn_primary"], hover_color=THEME["btn_primary_hover"], text_color=("white", "black"))
-        self.save_btn.grid(row=8, column=0, columnspan=2, pady=30)
+        self.save_btn.grid(row=9, column=0, columnspan=2, pady=30)
         
         self.status_label = ctk.CTkLabel(self, text="", text_color=THEME["text_secondary"])
         self.status_label.grid(row=9, column=0, columnspan=2)
@@ -86,7 +91,8 @@ class SettingsView(ctk.CTkFrame):
                 with open(self.config_file, 'r') as f:
                     config = json.load(f)
                     
-                self.url_entry.insert(0, config.get("verint_url", ""))
+                self.url_entry.insert(0, config.get("verint_url", "https://wfo.mt7.verintcloudservices.com/wfo/control/signin"))
+                self.cph_entry.insert(0, str(config.get("target_cph", 7.5)))
                 self.notify_entry.insert(0, str(config.get("notification_minutes_before", 5)))
                 self.interval_entry.insert(0, str(config.get("check_interval_seconds", 60)))
                 self.browser_var.set(config.get("browser_type", "msedge"))
@@ -100,6 +106,7 @@ class SettingsView(ctk.CTkFrame):
         try:
             config = {
                 "verint_url": self.url_entry.get(),
+                "target_cph": float(self.cph_entry.get()),
                 "notification_minutes_before": int(self.notify_entry.get()),
                 "check_interval_seconds": int(self.interval_entry.get()),
                 "browser_type": self.browser_var.get(),

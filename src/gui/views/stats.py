@@ -58,12 +58,15 @@ class StatsView(ctk.CTkFrame):
         self.card_aht = self.create_kpi_card(self.kpi_frame, "Avg AHT (min)", "0.0", 1)
         self.card_vol = self.create_kpi_card(self.kpi_frame, "Total Volume", "0", 2)
         
+        self.card_total_keys = self.create_kpi_card(self.kpi_frame, "Total Keys", "0", 0, row=1)
+        self.card_total_clicks = self.create_kpi_card(self.kpi_frame, "Total Clicks", "0", 1, row=1)
+        
         # Initial Draw
         self.refresh_stats()
         
-    def create_kpi_card(self, parent, title, value, col):
+    def create_kpi_card(self, parent, title, value, col, row=0):
         frame = ctk.CTkFrame(parent, fg_color=THEME["bg_card"], corner_radius=10)
-        frame.grid(row=0, column=col, sticky="ew", padx=10)
+        frame.grid(row=row, column=col, sticky="ew", padx=10, pady=5)
         
         ctk.CTkLabel(frame, text=title, font=("Roboto", 12), text_color=THEME["text_secondary"]).pack(pady=(15, 5))
         val_lbl = ctk.CTkLabel(frame, text=value, font=("Roboto", 20, "bold"), text_color=THEME["accent"])
@@ -103,12 +106,13 @@ class StatsView(ctk.CTkFrame):
         # Always update global stats
         wk_vol = self.stats_manager.get_weekly_stats()
         wk_cph = self.stats_manager.get_average_cph_per_day() # This was tickets/day actually
-        # We need real CPH/AHT methods for "This Week Total".
-        # Creating ad-hoc calc using get_aggregated_stats for 'week' (last 1 point)
         
-        # Let's just update the specific card relevant to view for now, or all if we can
-        # self.card_cph.configure(text=str(self.stats_manager.get_average_cph("week"))) # Hypothetical
-        pass
+        # Update Total Keys/Clicks for the selected period
+        # period is "day" or "week"
+        p_key = "today" if period == "day" else "week"
+        act_stats = self.stats_manager.get_activity_stats(p_key)
+        self.card_total_keys.configure(text=f"{act_stats.get('keys', 0):,}")
+        self.card_total_clicks.configure(text=f"{act_stats.get('clicks', 0):,}")
 
     def draw_bars(self, data):
         # Clear

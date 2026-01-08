@@ -4,6 +4,7 @@ import winsound
 import json
 import os
 import sys
+import time
 import tkinter.messagebox as messagebox
 from plyer import notification
 from datetime import datetime, timedelta
@@ -18,6 +19,7 @@ from src.gui.theme import THEME
 from src.gui.views.settings import SettingsView
 from src.gui.views.stats import StatsView
 from src.gui.views.cph import CPHTracker
+from src.gui.views.welcome import WelcomeDialog
 
 # Set theme
 ctk.set_appearance_mode("Dark")
@@ -33,6 +35,19 @@ class ScheduleApp(ctk.CTk):
         self.title("Verint Schedule Tracker")
         self.geometry("900x800")
         
+        # Icon Setup
+        try:
+            # Handle path for dev and PyInstaller
+            base_path = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+            icon_path = os.path.join(base_path, "src", "gui", "assets", "icon.ico")
+            
+            if os.path.exists(icon_path):
+                self.iconbitmap(icon_path)
+            else:
+                print(f"Icon not found at: {icon_path}")
+        except Exception as e:
+            print(f"Failed to load icon: {e}")
+            
         # Initialize Core Managers
         self.stats_manager = StatsManager()
         self.input_monitor = InputMonitor(self.stats_manager)
@@ -57,6 +72,36 @@ class ScheduleApp(ctk.CTk):
         self.check_queue()
         self.check_notifications()
         
+        # Check for first-time run
+        self.after(200, self.check_first_run)
+        
+    def check_first_run(self):
+        """Show welcome wizard if config doesn't exist."""
+        # Check if config was essentially empty or file didn't exist (load_config handles reading file, 
+        # but if file didn't exist self.config might be defaults or empty if I didn't save defaults)
+        # Actually load_config creates empty dict if file not found.
+        if not os.path.exists("config.json"):
+            # Disable main window interaction temporarily
+            # WelcomeDialog is modal so this is implicit
+            self.welcome_dialog = WelcomeDialog(self, self.on_welcome_complete)
+
+    def on_welcome_complete(self, new_config):
+        """Called when Welcome Wizard finishes."""
+        self.config = new_config
+        
+        # Apply new settings to live components
+        if hasattr(self, 'cph_tracker'):
+             target = float(new_config.get("target_cph", 7.5))
+             self.cph_tracker.target_cph = target
+             self.cph_tracker.seconds_per_ticket = int(3600 / target)
+             self.cph_tracker.remaining_seconds = self.cph_tracker.seconds_per_ticket
+             # Update info label
+             ticket_time = self.cph_tracker.format_time(self.cph_tracker.seconds_per_ticket)
+             self.cph_tracker.info_label.configure(text=f"Target: {target} CPH ({ticket_time} / ticket)")
+             
+        # Log status
+        self.status_bar.configure(text="Setup complete. Ready to track.")
+
     def load_config(self):
         try:
             if os.path.exists("config.json"):
@@ -114,7 +159,8 @@ class ScheduleApp(ctk.CTk):
         self.schedule_frame.grid_columnconfigure(0, weight=1) # Ensure content expands
         
         # CPH Tracker
-        self.cph_tracker = CPHTracker(self.tab_dashboard, self, self.stats_manager, self.input_monitor)
+        target_cph = float(self.config.get("target_cph", 7.5))
+        self.cph_tracker = CPHTracker(self.tab_dashboard, self, self.stats_manager, self.input_monitor, target_cph=target_cph)
         self.cph_tracker.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 15))
         
         # Footer

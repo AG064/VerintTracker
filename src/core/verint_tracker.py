@@ -8,6 +8,7 @@ from dateutil import parser
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 from datetime import datetime, timedelta
 
+import sys 
 import os
 
 class VerintTracker:
@@ -22,12 +23,14 @@ class VerintTracker:
         self.page = None
         
         # Paths
-        self.local_state_dir = Path("playwright-state").absolute()
-        self.system_edge_dir = Path(os.path.expanduser("~\\AppData\\Local\\Microsoft\\Edge\\User Data"))
+        # Move profile to LocalAppData to ensure local disk usage and permissions
+        # This fixes issues where 'A:' might be a network drive causing SQLite locks
+        self.local_appdata = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local")))
+        self.profile_dir = self.local_appdata / "VerintTracker" / "edge_profile"
         
         # Load config
         self.config = self._load_config()
-        self.verint_url = self.config.get("verint_url", "https://verint.com/login") 
+        self.verint_url = self.config.get("verint_url", "https://wfo.mt7.verintcloudservices.com/wfo/control/signin") 
         self.headless = self.config.get("headless", False)
 
     def _load_config(self) -> dict:
@@ -53,38 +56,70 @@ class VerintTracker:
 
     def start_browser(self):
         """
-        Start the browser. 
-        Forces the use of the system default profile to share login state.
-        NOTE: Microsoft Edge must be completely closed for this to work.
+        Start the browser using a local profile.
+        Handles lock cleanup and finding the executable.
         """
+        # FIX: Handle frozen environment (PyInstaller --noconsole)
+        # Playwright/subprocess requires valid stdio handles
+        if sys.stdout is None:
+            sys.stdout = open(os.devnull, 'w')
+        if sys.stderr is None:
+            sys.stderr = open(os.devnull, 'w')
+            
+        # FIX: Ensure Playwright looks for local browsers/system browsers properly
+        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
+
         try:
             self.playwright = sync_playwright().start()
             
             # Common args
             launch_args = [
                 "--start-maximized", 
-                "--no-default-browser-check"
+                "--no-default-browser-check",
+                "--disable-blink-features=AutomationControlled" # Help avoid detection/policy issues
             ]
             
-            print(f"DEBUG: Attempting to use system profile at {self.system_edge_dir}...")
+            # 1. Define User Data Directory
+            user_data_dir = self.profile_dir
+            if not user_data_dir.exists():
+                try:
+                    user_data_dir.mkdir(parents=True, exist_ok=True)
+                except Exception as e:
+                    print(f"Warning: Failed to create profile dir: {e}")
             
-            # Warn if running
-            if self._is_edge_running():
-                print("WARNING: Edge appears to be running. This may cause the launch to fail or delegate to the existing window without Playwright control.")
-
+            # 2. Cleanup Lock Files (Fix for "process did exit: exitCode=0")
+            # If the browser crashed or was killed, SingletonLock might remain and prevent startup
             try:
-                self.context = self.playwright.chromium.launch_persistent_context(
-                    user_data_dir=self.system_edge_dir,
-                    channel="msedge",
-                    headless=self.headless,
-                    args=launch_args,
-                    no_viewport=True,
-                )
-                print("DEBUG: Successfully attached to system profile.")
+                for lock_name in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
+                    lock_file = user_data_dir / lock_name
+                    if lock_file.exists():
+                        print(f"DEBUG: Removing stale lock file: {lock_name}")
+                        lock_file.unlink()
             except Exception as e:
-                raise Exception(
-                    "Failed to open Work Profile in Edge. Please ensure all Microsoft Edge windows are CLOSED before starting the tracker."
-                ) from e
+                print(f"Warning: Failed to cleanup lock file: {e}")
+
+            print(f"DEBUG: Using local profile at {user_data_dir}...")
+            
+            # 3. Handle Executable Path
+            # Explicitly find Edge to avoid channel detection issues in frozen env
+            executable_path = None
+            if os.path.exists(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"):
+                executable_path = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+            elif os.path.exists(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"):
+                executable_path = r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"
+            
+            print(f"DEBUG: Launching Edge from {executable_path}")
+
+            self.context = self.playwright.chromium.launch_persistent_context(
+                user_data_dir=user_data_dir,
+                executable_path=executable_path, # Use explicit path if found
+                channel="msedge" if not executable_path else None, # Fallback to channel
+                headless=self.headless,
+                args=launch_args,
+                no_viewport=True,
+                # ignore_default_args=["--enable-automation"] 
+            )
+            print("DEBUG: Browser launched successfully.")
 
             # Cleanup Tabs: Close extra tabs if session restore opened them
             try:
