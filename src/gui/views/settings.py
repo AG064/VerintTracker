@@ -1,6 +1,11 @@
 import customtkinter as ctk
 import json
 import os
+import sys
+import webbrowser
+import threading
+import keyboard
+from PIL import Image
 from ..theme import THEME
 
 class SettingsView(ctk.CTkFrame):
@@ -10,7 +15,7 @@ class SettingsView(ctk.CTkFrame):
     def __init__(self, master, app_instance):
         super().__init__(master, fg_color=THEME["bg_dark"])
         self.app = app_instance
-        self.config_file = "config.json"
+        self.config_file = getattr(self.app, 'config_path', "config.json")
         self.setup_ui()
         self.load_settings()
 
@@ -19,7 +24,32 @@ class SettingsView(ctk.CTkFrame):
         self.grid_columnconfigure(1, weight=3)
         
         # Header
-        ctk.CTkLabel(self, text="Application Settings", font=("Roboto", 20, "bold"), text_color=THEME["text_primary"]).grid(row=0, column=0, columnspan=2, pady=20)
+        header_frame = ctk.CTkFrame(self, fg_color="transparent")
+        header_frame.grid(row=0, column=0, columnspan=2, pady=20, sticky="ew")
+        
+        ctk.CTkLabel(header_frame, text="Application Settings", font=("Roboto", 20, "bold"), text_color=THEME["text_primary"]).pack(side="left", padx=20)
+        
+        # Try to load GitHub logo
+        github_img = None
+        try:
+            if hasattr(sys, "_MEIPASS"):
+                base_path = os.path.join(sys._MEIPASS, "src", "gui", "assets")
+            else:
+                # src/gui/views/settings.py -> src/gui/assets
+                base_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+                
+            img_path = os.path.join(base_path, "github_logo.png")
+            
+            if os.path.exists(img_path):
+                pil_image = Image.open(img_path)
+                github_img = ctk.CTkImage(light_image=pil_image, dark_image=pil_image, size=(20, 20))
+        except Exception:
+            pass
+
+        github_btn = ctk.CTkButton(header_frame, text="Visit GitHub", width=130, image=github_img, compound="left",
+                                   command=lambda: webbrowser.open("https://github.com/AG064/VerintTracker/releases"),
+                                   fg_color="#24292e", hover_color="#444c56", text_color="white")
+        github_btn.pack(side="right", padx=20)
         
         # Helper for labels
         def create_label(text, row):
@@ -27,8 +57,14 @@ class SettingsView(ctk.CTkFrame):
 
         # Verint URL
         create_label("Verint URL (Optional):", 1)
-        self.url_entry = ctk.CTkEntry(self, width=400, placeholder_text="Verint Login URL", fg_color=THEME["bg_card"], text_color=THEME["text_primary"])
-        self.url_entry.grid(row=1, column=1, sticky="w", padx=10, pady=10)
+        url_frame = ctk.CTkFrame(self, fg_color="transparent")
+        url_frame.grid(row=1, column=1, sticky="w", padx=10, pady=10)
+        
+        self.url_entry = ctk.CTkEntry(url_frame, width=350, placeholder_text="Verint Login URL", fg_color=THEME["bg_card"], text_color=THEME["text_primary"])
+        self.url_entry.pack(side="left", padx=(0, 10))
+        
+        ctk.CTkButton(url_frame, text="Relaunch", width=80, command=self.relaunch_app,
+                      fg_color=THEME["accent"], hover_color=THEME["accent_hover"], text_color=("white", "black")).pack(side="left")
 
         # Target CPH
         create_label("Target CPH:", 2)
@@ -74,16 +110,36 @@ class SettingsView(ctk.CTkFrame):
                                                  button_hover_color=THEME["accent_hover"],
                                                  text_color=("black", "white")) # Fix text color for light mode
         self.appearance_menu.grid(row=8, column=1, sticky="w", padx=10, pady=10)
+
+        # Ticket Hotkey
+        create_label("Ticket Hotkey:", 9)
+        hotkey_frame = ctk.CTkFrame(self, fg_color="transparent")
+        hotkey_frame.grid(row=9, column=1, sticky="w", padx=10, pady=10)
         
+        self.hotkey_entry = ctk.CTkEntry(hotkey_frame, width=150, placeholder_text="e.g. - or ctrl+shift+a", fg_color=THEME["bg_card"], text_color=THEME["text_primary"])
+        self.hotkey_entry.pack(side="left", padx=(0, 10))
+        
+        self.record_btn = ctk.CTkButton(hotkey_frame, text="Record", width=80, command=self.start_recording,
+                                        fg_color=THEME["btn_primary"], text_color=("white", "black"))
+        self.record_btn.pack(side="left")
+
         # Save Button
         self.save_btn = ctk.CTkButton(self, text="Save Settings", command=self.save_settings, fg_color=THEME["btn_primary"], hover_color=THEME["btn_primary_hover"], text_color=("white", "black"))
-        self.save_btn.grid(row=9, column=0, columnspan=2, pady=30)
+        self.save_btn.grid(row=10, column=0, columnspan=2, pady=30)
         
         self.status_label = ctk.CTkLabel(self, text="", text_color=THEME["text_secondary"])
-        self.status_label.grid(row=9, column=0, columnspan=2)
+        self.status_label.grid(row=11, column=0, columnspan=2)
+
+        self._create_version_list()
 
     def change_appearance(self, new_appearance_mode):
         ctk.set_appearance_mode(new_appearance_mode)
+
+    def relaunch_app(self):
+        self.save_settings()
+        python = sys.executable
+        os.execl(python, python, *sys.argv)
+
 
     def load_settings(self):
         try:
@@ -98,6 +154,7 @@ class SettingsView(ctk.CTkFrame):
                 self.browser_var.set(config.get("browser_type", "msedge"))
                 self.headless_var.set(config.get("headless", False))
                 self.manual_file_var.set(config.get("use_manual_file", False))
+                self.hotkey_entry.insert(0, config.get("hotkey", ""))
                 # Restore theme if saved? ctk handles persistence often but we can store it.
         except Exception as e:
             self.status_label.configure(text=f"Error loading settings: {e}", text_color="red")
@@ -111,7 +168,8 @@ class SettingsView(ctk.CTkFrame):
                 "check_interval_seconds": int(self.interval_entry.get()),
                 "browser_type": self.browser_var.get(),
                 "headless": self.headless_var.get(),
-                "use_manual_file": self.manual_file_var.get()
+                "use_manual_file": self.manual_file_var.get(),
+                "hotkey": self.hotkey_entry.get()
             }
             
             with open(self.config_file, 'w') as f:
@@ -119,10 +177,50 @@ class SettingsView(ctk.CTkFrame):
                 
             self.status_label.configure(text="Settings saved! Restart application to apply changes.", text_color="green")
             
-            # Update app config in real-time where possible
-            self.app.config = config
+            # Update app config in real-time
+            if hasattr(self.app, 'apply_settings'):
+                self.app.apply_settings(config)
+                self.status_label.configure(text="Settings saved and applied!", text_color="green")
             
         except ValueError:
             self.status_label.configure(text="Error: Please enter valid numbers for minutes/seconds.", text_color="red")
         except Exception as e:
             self.status_label.configure(text=f"Error saving: {e}", text_color="red")
+
+    def _create_version_list(self):
+        # Current Version Footer
+        if hasattr(self.app, "version"):
+             ctk.CTkLabel(self, text=f"{self.app.version}", text_color=THEME["text_secondary"], font=("Roboto", 10)).grid(row=12, column=0, columnspan=2, pady=(20, 10))
+
+    def start_recording(self):
+        self.record_btn.configure(text="Press Key...", fg_color=THEME["accent"])
+        self.status_label.configure(text="Listening for hotkey... Press Esc to cancel.", text_color=THEME["accent"])
+        
+        # Run in thread to prevent freezing
+        threading.Thread(target=self._listen_for_key, daemon=True).start()
+
+    def _listen_for_key(self):
+        try:
+            # this blocks until a hotkey is completed
+            key = keyboard.read_hotkey(suppress=True)
+            # Invoke update on main thread
+            self.after(0, lambda: self._recording_complete(key))
+        except Exception as e:
+            self.after(0, lambda: self._recording_complete(None, str(e)))
+
+    def _recording_complete(self, key, error=None):
+        self.record_btn.configure(text="Record", fg_color=THEME["btn_primary"])
+        
+        if error:
+            self.status_label.configure(text=f"Error: {error}", text_color="red")
+            return
+            
+        if key == "esc":
+            self.status_label.configure(text="Recording cancelled.", text_color=THEME["text_secondary"])
+            return
+            
+        self.hotkey_entry.delete(0, 'end')
+        self.hotkey_entry.insert(0, key)
+        self.status_label.configure(text=f"Captured: {key}", text_color="green")
+
+

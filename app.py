@@ -3,8 +3,10 @@ import queue
 import winsound
 import json
 import os
+import shutil
 import sys
 import time
+import ctypes
 import tkinter.messagebox as messagebox
 from plyer import notification
 from datetime import datetime, timedelta
@@ -21,9 +23,18 @@ from src.gui.views.stats import StatsView
 from src.gui.views.cph import CPHTracker
 from src.gui.views.welcome import WelcomeDialog
 
+# Set App ID for Windows Taskbar and Notifications
+try:
+    myappid = 'verint.tracker.app.0.0.1' 
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+except ImportError:
+    pass
+
 # Set theme
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
+
+APP_VERSION = "Pre-release 0.0.1"
 
 class ScheduleApp(ctk.CTk):
     """
@@ -32,7 +43,29 @@ class ScheduleApp(ctk.CTk):
     def __init__(self):
         super().__init__(fg_color=THEME["bg_dark"])
         
-        self.title("Verint Schedule Tracker")
+        self.version = APP_VERSION
+        
+        # Setup Config Path (AppData)
+        self.app_data_dir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local")), "VerintTracker")
+        if not os.path.exists(self.app_data_dir):
+            try:
+                os.makedirs(self.app_data_dir)
+            except Exception as e:
+                print(f"Failed to create app data dir: {e}")
+        
+        self.config_path = os.path.join(self.app_data_dir, "config.json")
+        
+        # Setup Stats Path and Migration
+        self.stats_path = os.path.join(self.app_data_dir, "ticket_stats.json")
+        local_stats = "ticket_stats.json" # Check in current directory
+        if os.path.exists(local_stats) and not os.path.exists(self.stats_path):
+            try:
+                shutil.copy2(local_stats, self.stats_path)
+                print(f"Migrated stats to {self.stats_path}")
+            except Exception as e:
+                print(f"Migration failed: {e}")
+
+        self.title(f"Verint Schedule Tracker {self.version}")
         self.geometry("900x800")
         
         # Icon Setup
@@ -49,7 +82,7 @@ class ScheduleApp(ctk.CTk):
             print(f"Failed to load icon: {e}")
             
         # Initialize Core Managers
-        self.stats_manager = StatsManager()
+        self.stats_manager = StatsManager(filepath=self.stats_path)
         self.input_monitor = InputMonitor(self.stats_manager)
         
         # Setup Worker Queues
@@ -59,13 +92,21 @@ class ScheduleApp(ctk.CTk):
         
         self.current_schedule = []
         self.notified_activities = set()
+        self.refresh_timer = None
         
         # Load config for notifications
         self.config = {}
         self.load_config()
         
         self.setup_ui()
-        self.start_worker()
+        
+        # Only start worker if config exists. 
+        # If it's a fresh run, we wait for Welcome Wizard to complete.
+        if self.config:
+            self.start_worker()
+        else:
+            self.status_bar.configure(text="Waiting for setup...")
+            
         self.input_monitor.start()
         
         # Start Event Loops
@@ -77,17 +118,26 @@ class ScheduleApp(ctk.CTk):
         
     def check_first_run(self):
         """Show welcome wizard if config doesn't exist."""
-        # Check if config was essentially empty or file didn't exist (load_config handles reading file, 
-        # but if file didn't exist self.config might be defaults or empty if I didn't save defaults)
-        # Actually load_config creates empty dict if file not found.
-        if not os.path.exists("config.json"):
+        # Check if config was essentially empty or file didn't exist 
+        if not os.path.exists(self.config_path):
             # Disable main window interaction temporarily
             # WelcomeDialog is modal so this is implicit
             self.welcome_dialog = WelcomeDialog(self, self.on_welcome_complete)
 
     def on_welcome_complete(self, new_config):
         """Called when Welcome Wizard finishes."""
+        # Save to AppData
+        try:
+            with open(self.config_path, 'w') as f:
+                json.dump(new_config, f, indent=4)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save initial config: {e}")
+            
         self.config = new_config
+        
+        # Start worker now that we have configuration
+        if not self.worker or not self.worker.is_alive():
+            self.start_worker()
         
         # Apply new settings to live components
         if hasattr(self, 'cph_tracker'):
@@ -104,8 +154,8 @@ class ScheduleApp(ctk.CTk):
 
     def load_config(self):
         try:
-            if os.path.exists("config.json"):
-                with open("config.json", "r") as f:
+            if os.path.exists(self.config_path):
+                with open(self.config_path, "r") as f:
                     self.config = json.load(f)
         except:
             pass
@@ -129,7 +179,7 @@ class ScheduleApp(ctk.CTk):
         self.setup_dashboard_tab()
         
         # --- Statistics Tab ---
-        self.stats_view = StatsView(self.tab_stats, self.stats_manager)
+        self.stats_view = StatsView(self.tab_stats, self, self.stats_manager)
         self.stats_view.configure(fg_color=THEME["bg_dark"]) # Patch bg
         self.stats_view.pack(fill="both", expand=True, padx=10, pady=10)
 
@@ -160,7 +210,8 @@ class ScheduleApp(ctk.CTk):
         
         # CPH Tracker
         target_cph = float(self.config.get("target_cph", 7.5))
-        self.cph_tracker = CPHTracker(self.tab_dashboard, self, self.stats_manager, self.input_monitor, target_cph=target_cph)
+        hotkey = self.config.get("hotkey", "")
+        self.cph_tracker = CPHTracker(self.tab_dashboard, self, self.stats_manager, self.input_monitor, target_cph=target_cph, hotkey=hotkey)
         self.cph_tracker.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 15))
         
         # Footer
@@ -180,7 +231,26 @@ class ScheduleApp(ctk.CTk):
         self.worker.start()
         
         # Auto refresh timer
-        self.after(60000, self.auto_refresh)
+        self.auto_refresh()
+
+    def apply_settings(self, new_config):
+        """Apply new configuration settings immediately."""
+        print("Applying new settings...")
+        self.config = new_config
+        
+        # 1. Update CPH Tracker
+        if hasattr(self, 'cph_tracker'):
+            self.cph_tracker.update_target_cph(new_config.get("target_cph", 7.5))
+            self.cph_tracker.update_hotkey(new_config.get("hotkey", ""))
+            
+        # 2. Update Stats View (Target Lines)
+        if hasattr(self, 'stats_view'):
+            self.stats_view.refresh_stats()
+            
+        # 3. Update Auto Refresh Timer
+        if self.refresh_timer:
+            self.after_cancel(self.refresh_timer)
+        self.auto_refresh()
 
     def check_queue(self):
         """Check for messages from the worker thread."""
@@ -239,7 +309,10 @@ class ScheduleApp(ctk.CTk):
 
     def auto_refresh(self):
         self.request_refresh()
-        self.after(60000, self.auto_refresh)
+        interval = int(self.config.get("check_interval_seconds", 60))
+        # Ensure minimum 30 seconds
+        if interval < 30: interval = 30
+        self.refresh_timer = self.after(interval * 1000, self.auto_refresh)
 
     def update_schedule_ui(self, items):
         self.status_bar.configure(text=f"Updated at {datetime.now().strftime('%H:%M:%S')}")

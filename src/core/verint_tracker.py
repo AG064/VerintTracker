@@ -27,6 +27,7 @@ class VerintTracker:
         # This fixes issues where 'A:' might be a network drive causing SQLite locks
         self.local_appdata = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local")))
         self.profile_dir = self.local_appdata / "VerintTracker" / "edge_profile"
+        self.config_path = self.local_appdata / "VerintTracker" / "config.json"
         
         # Load config
         self.config = self._load_config()
@@ -34,10 +35,10 @@ class VerintTracker:
         self.headless = self.config.get("headless", False)
 
     def _load_config(self) -> dict:
-        """Load configuration from config.json."""
+        """Load configuration from AppData config.json."""
         try:
-            if Path("config.json").exists():
-                with open("config.json", "r") as f:
+            if self.config_path.exists():
+                with open(self.config_path, "r") as f:
                     return json.load(f)
         except Exception as e:
             print(f"Error loading config: {e}")
@@ -110,15 +111,35 @@ class VerintTracker:
             
             print(f"DEBUG: Launching Edge from {executable_path}")
 
-            self.context = self.playwright.chromium.launch_persistent_context(
-                user_data_dir=user_data_dir,
-                executable_path=executable_path, # Use explicit path if found
-                channel="msedge" if not executable_path else None, # Fallback to channel
-                headless=self.headless,
-                args=launch_args,
-                no_viewport=True,
-                # ignore_default_args=["--enable-automation"] 
-            )
+            # Retry mechanism for browser launch to handle race conditions or locks
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    self.context = self.playwright.chromium.launch_persistent_context(
+                        user_data_dir=user_data_dir,
+                        executable_path=executable_path, # Use explicit path if found
+                        channel="msedge" if not executable_path else None, # Fallback to channel
+                        headless=self.headless,
+                        args=launch_args,
+                        no_viewport=True,
+                        timeout=15000 
+                        # ignore_default_args=["--enable-automation"] 
+                    )
+                    break # Success
+                except Exception as launch_error:
+                    print(f"DEBUG: Attempt {attempt+1} failed: {launch_error}")
+                    if attempt < max_retries - 1:
+                        time.sleep(2) # Wait and retry
+                        # Try cleaning locks again between retries
+                        try:
+                             for lock_name in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
+                                lock_file = user_data_dir / lock_name
+                                if lock_file.exists():
+                                    lock_file.unlink()
+                        except: pass
+                    else:
+                        raise launch_error
+
             print("DEBUG: Browser launched successfully.")
 
             # Cleanup Tabs: Close extra tabs if session restore opened them

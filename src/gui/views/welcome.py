@@ -71,6 +71,12 @@ class WelcomeDialog(ctk.CTkToplevel):
         # Help text for CPH
         ctk.CTkLabel(form_frame, text="Contacts Per Hour goal (Standard is 7.5)", font=("Roboto", 11), text_color=THEME["text_secondary"]).grid(row=2, column=1, sticky="w", padx=(20, 0), pady=(0, 10))
 
+        # Ticket Hotkey
+        ctk.CTkLabel(form_frame, text="Ticket Hotkey:", font=("Roboto", 14, "bold"), text_color=THEME["text_primary"]).grid(row=3, column=0, sticky="w", pady=15)
+        self.hotkey_entry = ctk.CTkEntry(form_frame, width=140, placeholder_text="e.g. -", fg_color=THEME["bg_card"], text_color=THEME["text_primary"])
+        self.hotkey_entry.grid(row=3, column=1, sticky="w", padx=(20, 0))
+        ctk.CTkLabel(form_frame, text="Key to quick-reply (Leave empty for none)", font=("Roboto", 11), text_color=THEME["text_secondary"]).grid(row=4, column=1, sticky="w", padx=(20, 0), pady=(0, 10))
+
         # Start Button
         ctk.CTkButton(self, text="Get Started", command=self.save_and_close, 
                       fg_color=THEME["btn_primary"], hover_color=THEME["btn_primary_hover"], 
@@ -92,7 +98,8 @@ class WelcomeDialog(ctk.CTkToplevel):
             "notification_minutes_before": 5,
             "check_interval_seconds": 60,
             "headless": False,
-            "use_manual_file": False
+            "use_manual_file": False,
+            "hotkey": self.hotkey_entry.get()
         }
 
         # Save to file

@@ -12,25 +12,17 @@ if exist "venv\Scripts\activate.bat" (
 
 echo Installing/Upgrading PyInstaller...
 pip install pyinstaller pillow --upgrade
+pip install -r requirements.txt
 
 echo.
 echo Checking for Logo...
 python scripts/setup_icon.py
 
 echo.
-echo Building Executable...
+echo Building Executable from Spec...
 echo This may take a few minutes.
 
-REM --collect-all is crucial for customtkinter (themes) and playwright (drivers)
-pyinstaller --noconfirm --onefile --windowed --name "VerintTracker" ^
-    --collect-all customtkinter ^
-    --collect-all playwright ^
-    --collect-all plyer ^
-    --add-data "src/gui/assets/icon.ico;src/gui/assets" ^
-    --icon "src/gui/assets/icon.ico" ^
-    --hidden-import "pynput.keyboard._win32" ^
-    --hidden-import "pynput.mouse._win32" ^
-    app.py
+pyinstaller --noconfirm --clean VerintTracker.spec
 
 if errorlevel 1 (
     echo.
@@ -40,15 +32,13 @@ if errorlevel 1 (
 )
 
 echo.
-echo Copying config file to dist folder...
-copy config.json dist\config.json >nul
-
-echo.
 echo ======================================
 echo Build Complete!
+echo File is located in: dist\VerintTracker.exe
 echo ======================================
 echo.
 echo The executable is located in the "dist" folder.
-echo You can copy "VerintTracker.exe" and "config.json" to any location.
+echo You can copy "VerintTracker.exe" to any location.
+echo Configuration is now stored in %LOCALAPPDATA%\VerintTracker\config.json
 echo Note: The first run might be slightly slower as it unpacks dependencies.
 echo.

@@ -31,6 +31,7 @@ You can configure the application via the **Settings** tab in the application wi
 - **Check Interval**: How often to refresh the schedule (default: 60 seconds).
 - **Browser Type**: Choose between Edge or Chrome.
 - **Headless Mode**: Run browser in background (only recommended if you have a fixed URL and persistent login).
+- **Ticket Hotkey**: Customize the keybind for completing tickets (default: `-`). Supports combinations like `ctrl+shift+a`.
 
 ## Understanding the Console Output
 

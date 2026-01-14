@@ -9,7 +9,7 @@ An automated application that monitors your Verint schedule and helps you manage
 - ⏳ **Countdown Timer**: Shows time remaining until your next activity switch.
 - ⏱️ **CPH Pacing Timer**: Built-in timer to help you maintain 7.5 CPH (8 minutes per ticket).
   - **Reply vs No-Reply**: Track tickets that require replies separately from those that don't.
-  - **Hotkeys**: Use `Numpad -` to quickly complete a ticket.
+  - **Hotkeys**: Use configured hotkey (default: `Numpad -`) to quickly complete a ticket.
 - ⌨️ **Input Monitoring**: Tracks your KPM (Keys Per Minute) and CPM (Clicks Per Minute) locally to help you gauge activity levels.
 - 🔔 **Smart Notifications**: Audible and visual desktop notifications 5 minutes before activity changes.
 - 🌐 **Robust Automation**: 

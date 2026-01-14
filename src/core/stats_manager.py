@@ -34,7 +34,41 @@ class StatsManager:
                 return {"tickets": [], "activity": {}}
         return {"tickets": [], "activity": {}}
         
+    def _calculate_daily_metrics(self):
+        """Calculate and update derived metrics (CPH, AHT) for today."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        if today not in self.data["activity"]:
+            return
+
+        stats = self.data["activity"][today]
+        duration_seconds = stats.get("duration", 0)
+        duration_hours = duration_seconds / 3600.0
+        
+        # Count tickets for today
+        ticket_count = 0
+        for t in self.data["tickets"]:
+             # Handle both string and dict formats (though _load_data normalizes to dicts)
+            ts = t["timestamp"] if isinstance(t, dict) else t
+            if ts.startswith(today):
+                ticket_count += 1
+        
+        # Update stats
+        stats["ticket_count"] = ticket_count
+        
+        if duration_hours > 0:
+            stats["cph"] = round(ticket_count / duration_hours, 2)
+        else:
+            stats["cph"] = 0.0
+            
+        if ticket_count > 0:
+            stats["aht"] = round(duration_seconds / ticket_count, 2)
+        else:
+            stats["aht"] = 0.0
+
     def _save_data(self):
+        # Ensure metrics are up-to-date before saving
+        self._calculate_daily_metrics()
+        
         with open(self.filepath, 'w') as f:
             json.dump(self.data, f, indent=2)
             
@@ -242,6 +276,100 @@ class StatsManager:
             result.append((date_str, count))
             
         return result
+
+    def get_stats_range(self, start_date: datetime, end_date: datetime, period="day", metric="cph"):
+        """
+        Get stats for a specific date range.
+        Returns: list of (label, value) tuples
+        """
+        data_points = []
+        
+        # 1. Gather raw data (tickets and duration) grouped by period key
+        grouped_tickets = defaultdict(int)
+        grouped_duration = defaultdict(float) # seconds
+        grouped_keys = defaultdict(int) 
+        grouped_clicks = defaultdict(int)
+        period_keys = [] 
+        key_labels = {}
+        
+        # Helper to generate keys
+        def get_key(date_obj, p):
+            if p == "day":
+                return date_obj.strftime("%Y-%m-%d")
+            elif p == "week":
+                year, week, _ = date_obj.isocalendar()
+                return f"{year}-W{week:02d}"
+        
+        # Generate target keys (x-axis)
+        curr = start_date
+        while curr <= end_date:
+            k = get_key(curr, period)
+            if k not in period_keys:
+                period_keys.append(k)
+                if period == "day":
+                    key_labels[k] = curr.strftime("%a %d")
+                else:
+                    y, w, _ = curr.isocalendar()
+                    key_labels[k] = f"Wk {w}"
+            curr += timedelta(days=1)
+                
+        # Fill Aggregates
+        # 1. Tickets
+        for ticket in self.data["tickets"]:
+            if isinstance(ticket, str): t_str = ticket; has_reply = True
+            else: t_str = ticket["timestamp"]; has_reply = ticket.get("has_reply", True)
+            
+            if not has_reply: continue
+            
+            try:
+                t_date = datetime.fromisoformat(t_str)
+                # Filter strictly by date range
+                if start_date <= t_date <= end_date + timedelta(days=1): # inclusive enough
+                    k = get_key(t_date, period)
+                    if k in period_keys: # Only count if in list (safety)
+                        grouped_tickets[k] += 1
+            except: continue
+            
+        # 2. Duration (from activity)
+        # activity keys are always YYYY-MM-DD
+        for date_str, act_data in self.data["activity"].items():
+            try:
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                if start_date.date() <= date_obj.date() <= end_date.date():
+                    target_k = get_key(date_obj, period)
+                    grouped_duration[target_k] += act_data.get("duration", 0)
+                    grouped_keys[target_k] += act_data.get("keys", 0)
+                    grouped_clicks[target_k] += act_data.get("clicks", 0)
+            except: continue
+            
+        # Calc Metric
+        for k in period_keys:
+            t_count = grouped_tickets[k]
+            dur_sec = grouped_duration[k]
+            total_keys = grouped_keys[k]
+            total_clicks = grouped_clicks[k]
+            val = 0.0
+            
+            if metric == "volume":
+                val = t_count
+            elif metric == "cph":
+                hours = dur_sec / 3600
+                if hours > 0.1: val = round(t_count / hours, 1)
+                else: val = 0.0
+            elif metric == "aht":
+                # Average Handle Time (Minutes)
+                if t_count > 0: val = round((dur_sec / 60) / t_count, 1)
+                else: val = 0.0
+            elif metric == "kpm": 
+                 minutes = dur_sec / 60
+                 if minutes > 1: val = round(total_keys / minutes, 1)
+            elif metric == "cpm":
+                 minutes = dur_sec / 60
+                 if minutes > 1: val = round(total_clicks / minutes, 1)
+                
+            data_points.append((key_labels[k], val))
+            
+        return data_points
 
     def get_aggregated_stats(self, period="day", metric="cph", count=14):
         """

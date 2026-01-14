@@ -7,3 +7,4 @@ pillow
 keyboard
 pynput
 pyinstaller
+matplotlib

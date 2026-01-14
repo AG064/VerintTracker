@@ -1,16 +1,38 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
+import sys
+import os
 
-datas = [('src/gui/assets/icon.ico', 'src/gui/assets')]
+block_cipher = None
+
+# Recurse all assets
+datas = [('src/gui/assets', 'src/gui/assets')]
 binaries = []
-hiddenimports = ['pynput.keyboard._win32', 'pynput.mouse._win32']
+hiddenimports = []
+
+# Collect packages that dynamic import
 tmp_ret = collect_all('customtkinter')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+
 tmp_ret = collect_all('playwright')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+
 tmp_ret = collect_all('plyer')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
+# Explicitly add matplotlib to hiddenimports (collect_all failed previously)
+hiddenimports += [
+    'keyboard',
+    'matplotlib',
+    'matplotlib.pyplot',
+    'matplotlib.backends',
+    'matplotlib.backends.backend_tkagg',
+    'numpy',
+    'PIL._tkinter_finder'
+]
+
+# Recurse all assets
+datas += [('src/gui/assets', 'src/gui/assets')]
 
 a = Analysis(
     ['app.py'],
@@ -22,15 +44,18 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
     noarchive=False,
-    optimize=0,
 )
-pyz = PYZ(a.pure)
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
     pyz,
     a.scripts,
     a.binaries,
+    a.zipfiles,
     a.datas,
     [],
     name='VerintTracker',

@@ -9,7 +9,7 @@ class CPHTracker(ctk.CTkFrame):
     Frame for the CPH (Contacts Per Hour) Pacing Timer.
     Tracks time per ticket and calculates session statistics.
     """
-    def __init__(self, master, app_instance, stats_manager, input_monitor, target_cph=7.5):
+    def __init__(self, master, app_instance, stats_manager, input_monitor, target_cph=7.5, hotkey=""):
         super().__init__(master, fg_color=THEME["bg_card"], corner_radius=15)
         self.app = app_instance
         self.stats_manager = stats_manager
@@ -18,6 +18,7 @@ class CPHTracker(ctk.CTkFrame):
         self.seconds_per_ticket = int(3600 / target_cph)
         self.remaining_seconds = self.seconds_per_ticket
         self.running = False
+        self.hotkey = hotkey
         
         # --- Restore Logic ---
         self.session_start_time = datetime.now()
@@ -44,10 +45,44 @@ class CPHTracker(ctk.CTkFrame):
         self.update_stats_display()
         
         # Setup global hotkey for quick completion
+        self.bind_hotkey()
+        
+    def bind_hotkey(self):
         try:
-            keyboard.add_hotkey('-', self.complete_ticket_hotkey)
+            if hasattr(self, 'hotkey') and self.hotkey:
+                # Unbind everything? safest is removal if we knew the old one, but keyboard.remove_hotkey needs exact match.
+                # However on init we are fine. For update, we will handle removal.
+                keyboard.add_hotkey(self.hotkey, self.complete_ticket_hotkey)
+                if hasattr(self, 'hotkey_label'):
+                    self.hotkey_label.configure(text=f"Hotkey: {self.hotkey} = Reply")
         except Exception as e:
-            print(f"Could not bind hotkey: {e}")
+            print(f"Could not bind hotkey {self.hotkey}: {e}")
+            if hasattr(self, 'hotkey_label'):
+                self.hotkey_label.configure(text=f"Hotkey Error: {str(e)}")
+
+    def update_hotkey(self, new_hotkey):
+        try:
+            # Try to remove old hotkey
+            try:
+                # Remove by callback to ensure we clear our specific bind
+                keyboard.remove_hotkey(self.complete_ticket_hotkey)
+            except:
+                pass 
+                
+            self.hotkey = new_hotkey
+            self.bind_hotkey()
+        except Exception as e:
+            print(f"Error updating hotkey: {e}")
+
+    def update_target_cph(self, new_target):
+        try:
+            self.target_cph = float(new_target)
+            self.seconds_per_ticket = int(3600 / self.target_cph)
+            ticket_time = self.format_time(self.seconds_per_ticket)
+            if hasattr(self, 'info_label'):
+                self.info_label.configure(text=f"Target: {self.target_cph} CPH ({ticket_time} / ticket)")
+        except Exception as e:
+            print(f"Error updating target CPH: {e}")
         
     def setup_ui(self):
         self.grid_columnconfigure(0, weight=1)
@@ -93,7 +128,7 @@ class CPHTracker(ctk.CTkFrame):
                                        corner_radius=8)
         self.start_btn.grid(row=7, column=0, columnspan=2, padx=20, pady=(10, 10), sticky="ew")
         
-        self.reply_btn = ctk.CTkButton(self, 
+        self.reply_btn = ctk.CTkButton(self,
                                        text="Complete (Reply)", 
                                        command=lambda: self.complete_ticket(True), 
                                        fg_color="transparent", 
@@ -117,7 +152,8 @@ class CPHTracker(ctk.CTkFrame):
                                         corner_radius=8)
         self.noreply_btn.grid(row=8, column=1, padx=(5, 20), pady=(0, 15), sticky="ew")
         
-        self.hotkey_label = ctk.CTkLabel(self, text="Hotkey: Numpad Minus (-) = Reply", text_color=THEME["text_secondary"], font=("Roboto", 10))
+        text = f"Hotkey: {self.hotkey} = Reply" if (hasattr(self, 'hotkey') and self.hotkey) else "Hotkey: None"
+        self.hotkey_label = ctk.CTkLabel(self, text=text, text_color=THEME["text_secondary"], font=("Roboto", 10))
         self.hotkey_label.grid(row=9, column=0, columnspan=2, pady=(0, 10))
         
     def format_time(self, seconds):
