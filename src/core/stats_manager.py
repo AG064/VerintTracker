@@ -1,5 +1,8 @@
 import json
 import os
+import tempfile
+import uuid
+from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict, Union
 from collections import defaultdict
@@ -15,6 +18,8 @@ class StatsManager:
             try:
                 with open(self.filepath, 'r') as f:
                     data = json.load(f)
+                    if not isinstance(data, dict) or not isinstance(data.get("tickets", []), list) or not isinstance(data.get("activity", {}), dict):
+                        raise ValueError("Invalid statistics structure")
                     # Ensure structure
                     if "tickets" not in data: data["tickets"] = []
                     
@@ -29,8 +34,11 @@ class StatsManager:
                     
                     if "activity" not in data: data["activity"] = {}
                     return data
-            except Exception as e:
-                print(f"Error loading stats: {e}")
+            except (ValueError, TypeError, KeyError):
+                original = Path(self.filepath)
+                backup = original.with_name(original.name + '.corrupt-' + uuid.uuid4().hex)
+                original.replace(backup)
+                print(f"Unreadable statistics preserved in {backup.name}")
                 return {"tickets": [], "activity": {}}
         return {"tickets": [], "activity": {}}
         
@@ -69,8 +77,20 @@ class StatsManager:
         # Ensure metrics are up-to-date before saving
         self._calculate_daily_metrics()
         
-        with open(self.filepath, 'w') as f:
-            json.dump(self.data, f, indent=2)
+        target = Path(self.filepath)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=target.parent,
+                                             prefix=target.name + '.', suffix='.tmp', delete=False) as output:
+                temporary = output.name
+                json.dump(self.data, output, indent=2, allow_nan=False)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, target)
+        finally:
+            if temporary is not None and os.path.exists(temporary):
+                os.unlink(temporary)
             
     def log_ticket(self, has_reply=True):
         """Log a ticket completion at the current time."""
